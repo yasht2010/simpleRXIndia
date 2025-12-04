@@ -5,60 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SmartRx</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>@media print { .no-print { display: none !important; } body { background: white; } .print-area { border: none; box-shadow: none; padding: 0; } }</style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 font-sans">
 
-    <div class="max-w-3xl mx-auto bg-white rounded-xl shadow-xl overflow-hidden print-area min-h-[90vh] flex flex-col">
-        
-        <!-- HEADER -->
-        <div class="p-8 border-b-2 border-gray-800 flex justify-between items-start">
-            <div>
-                <h1 id="h_name" class="text-3xl font-bold text-gray-900">Dr. Name</h1>
-                <p id="h_qual" class="text-gray-600 font-medium">Qualification</p>
-                <p id="h_reg" class="text-xs text-gray-500 mt-1">Reg No</p>
-            </div>
-            <div class="text-right text-sm text-gray-600">
-                <p id="h_clinic" class="font-bold whitespace-pre-wrap">Clinic Details</p>
+    <!-- LOGIN UI -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-xl shadow-xl w-full max-w-md">
+            <h1 class="text-2xl font-bold text-blue-900 mb-2">SmartRx Pro 🩺</h1>
+            <input id="loginPhone" placeholder="Phone Number" class="w-full border p-3 rounded mb-3">
+            <input id="loginPass" type="password" placeholder="Password" class="w-full border p-3 rounded mb-4">
+            <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700">Login</button>
+            <p onclick="toggleRegister()" class="text-center text-xs text-gray-400 mt-4 cursor-pointer hover:underline">Register</p>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="appScreen" class="hidden min-h-screen flex flex-col items-center p-4">
+        <div class="w-full max-w-3xl flex justify-between items-center mb-4 no-print">
+            <div class="text-blue-900 font-bold">SmartRx</div>
+            <div class="flex gap-4 text-sm font-medium">
+                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">Credits: ₹<span id="creditDisplay">0</span></span>
+                <button onclick="logout()" class="text-red-500">Logout</button>
             </div>
         </div>
 
-        <!-- EDITOR -->
-        <div id="content" contenteditable="true" class="p-8 flex-grow prose max-w-none focus:outline-none">
-            <p class="text-gray-300 italic no-print" id="placeholder">Press Spacebar to dictate...</p>
-        </div>
-
-        <!-- FOOTER -->
-        <div class="bg-gray-50 p-4 border-t no-print">
-            <div class="flex justify-center mb-4 gap-4 items-center">
-                <button id="recordBtn" class="bg-red-600 hover:bg-red-700 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95">
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                </button>
+        <div class="max-w-3xl w-full bg-white rounded-xl shadow-xl overflow-hidden print-area min-h-[85vh] flex flex-col relative">
+            <div id="docHeader" contenteditable="true" class="p-8 border-b-2 border-gray-800 cursor-text hover:bg-gray-50 transition" onblur="saveHeader()"></div>
+            <div id="livePreview" class="px-8 pt-2 text-gray-400 text-sm italic h-6 overflow-hidden"></div>
+            <div id="content" contenteditable="true" class="p-8 flex-grow prose max-w-none focus:outline-none">
+                <p id="placeholder" class="text-gray-300 italic no-print">Press Spacebar to dictate...</p>
             </div>
-            <p id="status" class="text-center text-xs text-gray-500 font-bold mb-4">READY</p>
-            
-            <div class="flex justify-between">
-                <div class="space-x-2">
-                    <button onclick="openSettings()" class="text-gray-600 text-sm font-semibold underline">⚙️ Settings</button>
-                    <button onclick="openMacros()" class="text-blue-600 text-sm font-semibold underline">💊 Macros</button>
+            <div id="timerDisplay" class="hidden absolute top-4 right-4 bg-black text-white px-3 py-1 rounded-full text-xs font-mono z-10 opacity-80">05:00</div>
+
+            <div class="bg-gray-50 p-4 border-t no-print">
+                <div class="flex justify-center mb-4 relative">
+                    <button id="recordBtn" class="bg-red-600 text-white w-16 h-16 rounded-full shadow-lg transition-all flex items-center justify-center active:scale-95">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    </button>
                 </div>
-                <div class="space-x-2">
-                    <button onclick="window.location.reload()" class="px-3 py-1 text-gray-600 hover:bg-gray-200 rounded text-sm">Clear</button>
-                    <button onclick="window.print()" class="bg-gray-900 text-white px-4 py-2 rounded font-bold shadow text-sm">Print</button>
+                <p id="status" class="text-center text-xs text-gray-500 font-bold mb-4 h-4 overflow-hidden text-ellipsis whitespace-nowrap px-4">READY</p>
+                <div class="flex justify-between items-center">
+                    <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-blue-600 text-sm font-semibold underline">💊 Voice Macros</button>
+                    <div class="flex gap-2">
+                        <button onclick="window.location.reload()" class="px-3 py-1 text-gray-500 text-xs">New Patient</button>
+                        <button onclick="window.print()" class="bg-gray-900 text-white px-4 py-2 rounded text-sm font-bold">Print</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Modals (Standard) -->
-    <div id="settingsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 no-print">
+    <!-- SETTINGS & MACRO MODALS (Standard) -->
+    <div id="settingsModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print">
         <div class="bg-white rounded p-6 w-full max-w-lg shadow-xl">
             <h2 class="font-bold mb-4">Settings</h2>
             <input id="in_name" placeholder="Name" class="w-full border p-2 mb-2 rounded">
             <input id="in_qual" placeholder="Qualifications" class="w-full border p-2 mb-2 rounded">
             <input id="in_reg" placeholder="Reg No" class="w-full border p-2 mb-2 rounded">
             <textarea id="in_clinic" placeholder="Clinic Address" class="w-full border p-2 mb-2 rounded"></textarea>
-            <input id="in_keywords" placeholder="Keywords (Urimax:2, Drotin:2)" class="w-full border p-2 mb-2 bg-yellow-50 rounded">
+            <input id="in_keywords" placeholder="Keywords (Brand names)" class="w-full border p-2 mb-2 bg-yellow-50 rounded">
             <div class="flex justify-end gap-2">
                 <button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="px-4 py-2 text-gray-600">Cancel</button>
                 <button onclick="saveSettings()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
@@ -66,7 +73,7 @@
         </div>
     </div>
 
-    <div id="macroModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 no-print">
+    <div id="macroModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print">
         <div class="bg-white rounded p-6 w-full max-w-md shadow-xl">
             <h2 class="font-bold mb-4">Macros</h2>
             <input id="macroTrigger" placeholder="Trigger" class="w-full border p-2 mb-2 rounded">
@@ -80,150 +87,213 @@
     </div>
 
     <script>
-        const API_BASE = '';
-        let mediaRecorder, audioChunks = [], isRecording = false;
+        const getApiBase = () => {
+            if (window.location.protocol === 'blob:' || window.location.origin === 'null') {
+                return 'http://localhost:3000';
+            }
+            const host = window.location.hostname;
+            if (host === 'localhost' || host === '127.0.0.1') {
+                return window.location.port === '3000' ? '' : 'http://localhost:3000';
+            }
+            return '';
+        };
+        const API_BASE = getApiBase();
+        const socket = API_BASE ? io(API_BASE) : io();
         
-        const btn = document.getElementById('recordBtn');
-        const status = document.getElementById('status');
-        const content = document.getElementById('content');
+        let mediaRecorder, isRecording = false, transcriptBuffer = "", startTime = 0, timerInterval;
+        let backupAudioChunks = [];
+        let recordedMimeType = ''; // To store the browser's native mime type
 
-        // --- DIRECT TO DEEPGRAM LOGIC ---
-        async function startRecording() {
-            if(isRecording) return;
+        // --- AUTH ---
+        window.onload = initApp;
+        async function login() {
+            const phone = document.getElementById('loginPhone').value;
+            const pass = document.getElementById('loginPass').value;
+            const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone, password: pass }) });
+            const data = await res.json();
+            if (data.success) initApp(); else alert("Login Failed");
+        }
+        async function toggleRegister() {
+            const phone = prompt("New Phone:"); const pass = prompt("New Password:");
+            if(phone && pass) { await fetch('/api/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone, password: pass }) }); alert("Registered. Please login."); }
+        }
+        async function logout() { location.reload(); }
+        async function initApp() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                    processDirectly(blob);
-                };
-
-                mediaRecorder.start();
-                isRecording = true;
-                btn.classList.add('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
-                status.innerText = "LISTENING...";
-                status.className = "text-center text-xs text-red-600 font-bold mb-4";
-            } catch(e) { alert("Mic Error: " + e.message); }
+                const res = await fetch('/api/me');
+                if (res.status === 401) throw new Error("Unauthorized");
+                const data = await res.json();
+                document.getElementById('creditDisplay').innerText = data.credits;
+                document.getElementById('docHeader').innerHTML = data.header_html || "<h1>Dr. Name</h1><p>Edit Header...</p>";
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appScreen').classList.remove('hidden');
+                loadMacros();
+            } catch (e) {}
+        }
+        async function saveHeader() {
+            await fetch('/api/header', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ html: document.getElementById('docHeader').innerHTML }) });
         }
 
-        function stopRecording() {
-            if(!isRecording) return;
-            mediaRecorder.stop();
-            isRecording = false;
-            btn.classList.remove('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
-            status.innerText = "UPLOADING...";
-            status.className = "text-center text-xs text-blue-600 font-bold mb-4";
-        }
+        // --- SOCKET EVENTS ---
+        socket.on('transcript-update', (data) => {
+            const statusEl = document.getElementById('status');
+            if (data.isFinal) {
+                transcriptBuffer += " " + data.text;
+                document.getElementById('livePreview').innerText = "";
+                // Show last captured phrase in status
+                statusEl.innerText = "CAPTURED: " + data.text;
+                statusEl.classList.remove('text-gray-500');
+                statusEl.classList.add('text-blue-600');
+            } else {
+                document.getElementById('livePreview').innerText = data.text;
+                // Show hearing phrase
+                statusEl.innerText = "HEARING: " + data.text;
+                statusEl.classList.remove('text-gray-500');
+                statusEl.classList.add('text-red-500');
+            }
+        });
 
-        async function processDirectly(audioBlob) {
-            try {
-                // 1. Get Temp Token from our Server
-                const tokenRes = await fetch(`${API_BASE}/auth/deepgram-token`);
-                const tokenData = await tokenRes.json();
-                if (!tokenData.key) throw new Error("Could not get API Token");
+        socket.on('prescription-result', (data) => {
+            handleResult(data);
+        });
 
-                // 2. Upload DIRECTLY to Deepgram (Bypass Server)
-                status.innerText = "TRANSCRIBING...";
-                
-                // Fetch settings for keywords
-                const customKeywords = document.getElementById('in_keywords').value || "";
-                const kwParams = customKeywords.split(',').map(k => `keywords=${k.trim()}%3A2`).join('&');
-                
-                const dgUrl = `https://api.deepgram.com/v1/listen?model=nova-2-medical&smart_format=true&language=en-IN&${kwParams}`;
-                
-                const dgResponse = await fetch(dgUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Token ${tokenData.key}`,
-                        'Content-Type': 'audio/webm'
-                    },
-                    body: audioBlob
-                });
+        socket.on('use-backup-upload', () => {
+            document.getElementById('status').innerText = "USING BACKUP...";
+            document.getElementById('status').className = "text-center text-xs text-yellow-600 font-bold mb-4";
+            uploadBackup();
+        });
 
-                const dgResult = await dgResponse.json();
-                const transcript = dgResult.results?.channels[0]?.alternatives[0]?.transcript;
-
-                if (!transcript) throw new Error("Empty Transcription");
-
-                // 3. Send Text to Server for Formatting
-                status.innerText = "FORMATTING...";
-                const cleanContext = document.getElementById('placeholder') ? "" : content.innerHTML;
-                
-                const formatRes = await fetch(`${API_BASE}/process-text`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ transcript, context: cleanContext })
-                });
-                
-                const formatData = await formatRes.json();
-                
-                if (formatData.success) {
-                    content.innerHTML = formatData.raw;
-                    status.innerText = "DONE";
-                    status.className = "text-center text-xs text-green-600 font-bold mb-4";
-                } else {
-                    throw new Error(formatData.error);
-                }
-
-            } catch (err) {
-                console.error(err);
-                status.innerText = "ERROR - TRY AGAIN";
-                alert("Error: " + err.message);
+        function handleResult(data) {
+            const status = document.getElementById('status');
+            const btn = document.getElementById('recordBtn');
+            btn.classList.remove('bg-red-500', 'animate-pulse');
+            if (data.success) {
+                document.getElementById('content').innerHTML = data.html;
+                document.getElementById('creditDisplay').innerText = data.credits;
+                status.innerText = "DONE";
+                status.className = "text-center text-xs text-green-600 font-bold mb-4";
+            } else {
+                alert(data.error);
+                status.innerText = "ERROR";
             }
         }
 
-        // --- BUTTON EVENTS ---
-        btn.addEventListener('mousedown', startRecording);
-        btn.addEventListener('mouseup', stopRecording);
-        btn.addEventListener('touchstart', (e)=>{e.preventDefault(); startRecording()});
-        btn.addEventListener('touchend', (e)=>{e.preventDefault(); stopRecording()});
+        // --- RECORDING (Native Streaming) ---
+        async function startRecording() {
+            if (isRecording) return;
+            transcriptBuffer = "";
+            backupAudioChunks = [];
+            startTime = Date.now();
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Allow browser to choose native format (WebM/MP4)
+                mediaRecorder = new MediaRecorder(stream);
+                recordedMimeType = mediaRecorder.mimeType; 
+                console.log("Recording with mimeType:", recordedMimeType);
+                
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        socket.emit('audio-stream', e.data); // Send to Live
+                        backupAudioChunks.push(e.data); // Save for Backup
+                    }
+                };
+
+                mediaRecorder.start(500); // 500ms chunks
+
+                isRecording = true;
+                const btn = document.getElementById('recordBtn');
+                btn.classList.add('bg-red-500', 'animate-pulse');
+                document.getElementById('status').innerText = "LISTENING...";
+                startTimer();
+
+            } catch (e) { alert("Mic Error: " + e.message); }
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+            isRecording = false;
+            clearInterval(timerInterval);
+            document.getElementById('timerDisplay').classList.add('hidden');
+
+            if(mediaRecorder) mediaRecorder.stop();
+            if(mediaRecorder && mediaRecorder.stream) mediaRecorder.stream.getTracks().forEach(t => t.stop());
+
+            const duration = Date.now() - startTime;
+            if (duration < 2000) { 
+                document.getElementById('status').innerText = "Cancelled (<2s)";
+                document.getElementById('recordBtn').classList.remove('bg-red-500', 'animate-pulse');
+                return;
+            }
+
+            document.getElementById('status').innerText = "FORMATTING...";
+            const cleanContext = document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML;
+            
+            const pendingPreview = document.getElementById('livePreview').innerText;
+            const fullText = (transcriptBuffer + " " + pendingPreview).trim();
+
+            setTimeout(() => {
+                socket.emit('finalize-prescription', { fullTranscript: fullText, context: cleanContext });
+            }, 2500);
+        }
+
+        // --- BACKUP UPLOAD ---
+        async function uploadBackup() {
+            const blob = new Blob(backupAudioChunks, { type: recordedMimeType });
+            const formData = new FormData();
+            formData.append('audio', blob, 'backup_audio');
+            formData.append('context', document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML);
+
+            try {
+                const res = await fetch('/api/process-backup', { method: 'POST', body: formData });
+                const data = await res.json();
+                handleResult(data);
+            } catch (e) {
+                alert("Backup Upload Failed: " + e.message);
+            }
+        }
+
+        function startTimer() {
+            const timerEl = document.getElementById('timerDisplay');
+            timerEl.classList.remove('hidden');
+            let secondsLeft = 300;
+            timerInterval = setInterval(() => {
+                secondsLeft--;
+                const m = Math.floor(secondsLeft / 60);
+                const s = secondsLeft % 60;
+                timerEl.innerText = `0${m}:${s < 10 ? '0'+s : s}`;
+                if (secondsLeft <= 0) stopRecording();
+            }, 1000);
+        }
+
+        // Events
+        const b = document.getElementById('recordBtn');
+        b.addEventListener('mousedown', startRecording);
+        b.addEventListener('mouseup', stopRecording);
+        b.addEventListener('touchstart', (e)=>{e.preventDefault(); startRecording()});
+        b.addEventListener('touchend', (e)=>{e.preventDefault(); stopRecording()});
         document.addEventListener('keydown', (e) => { if(e.code==='Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') startRecording(); });
         document.addEventListener('keyup', (e) => { if(e.code==='Space') stopRecording(); });
 
-        // --- SETTINGS LOAD ---
-        window.onload = loadSettings;
-        async function loadSettings() {
-            try {
-                const res = await fetch(`${API_BASE}/settings`);
-                const data = await res.json();
-                document.getElementById('h_name').innerText = data.doctor_name || "Dr. Name";
-                document.getElementById('h_qual').innerText = data.qualification || "";
-                document.getElementById('h_reg').innerText = "Reg: " + (data.reg_no || "");
-                document.getElementById('h_clinic').innerText = data.clinic_details || "";
-                document.getElementById('in_name').value = data.doctor_name || "";
-                document.getElementById('in_qual').value = data.qualification || "";
-                document.getElementById('in_reg').value = data.reg_no || "";
-                document.getElementById('in_clinic').value = data.clinic_details || "";
-                document.getElementById('in_keywords').value = data.custom_keywords || "";
-            } catch(e) {}
-        }
-        async function saveSettings() {
-            const data = {
-                doctor_name: document.getElementById('in_name').value,
-                qualification: document.getElementById('in_qual').value,
-                reg_no: document.getElementById('in_reg').value,
-                clinic_details: document.getElementById('in_clinic').value,
-                custom_keywords: document.getElementById('in_keywords').value
-            };
-            await fetch(`${API_BASE}/settings`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
-            document.getElementById('settingsModal').classList.add('hidden');
-            loadSettings();
-        }
+        // Macros Logic
         function openSettings() { document.getElementById('settingsModal').classList.remove('hidden'); }
         function openMacros() { 
             document.getElementById('macroModal').classList.remove('hidden'); 
-            fetch(`${API_BASE}/macros`).then(r=>r.json()).then(d => document.getElementById('macroList').innerHTML = d.map(m => `<div class="border-b py-1"><b>${m.trigger_phrase}:</b> ${m.expansion}</div>`).join(''));
+            loadMacros();
+        }
+        async function loadMacros() {
+            const res = await fetch('/api/macros');
+            const data = await res.json();
+            document.getElementById('macroList').innerHTML = data.map(m => `<div class="border-b py-1"><b>${m.trigger_phrase}:</b> ${m.expansion}</div>`).join('');
         }
         async function saveMacro() {
-            await fetch(`${API_BASE}/macros`, {
+            await fetch('/api/macros', {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ trigger: document.getElementById('macroTrigger').value, expansion: document.getElementById('macroExpansion').value })
             });
             document.getElementById('macroTrigger').value = ''; document.getElementById('macroExpansion').value = '';
-            openMacros();
+            loadMacros();
         }
     </script>
 </body>

@@ -1,85 +1,225 @@
 import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { createClient } from '@deepgram/sdk';
+import session from 'express-session';
+import SQLiteStore from 'connect-sqlite3';
+import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import basicAuth from 'express-basic-auth'; 
-import * as db from './database.js'; 
+import multer from 'multer';
+import fs from 'fs';
+import * as db from './database.js';
 import { generateScribePrompt } from './prompts.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer);
+const upload = multer({ dest: 'uploads/' });
 
-// --- 🔒 AUTH ---
-const adminUser = process.env.ADMIN_USER;
-const adminPass = process.env.ADMIN_PASS;
-if (adminUser && adminPass) {
-    const users = {}; users[adminUser] = adminPass;
-    app.use(basicAuth({ users, challenge: true, realm: 'SmartRx Login' }));
-}
+if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
 
+// --- SESSION CONFIG ---
+const SQLStore = SQLiteStore(session);
+const sessionMiddleware = session({
+    store: new SQLStore({ dir: __dirname, db: 'smartrx.db' }),
+    secret: 'smartrx_secret_key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
+});
+
+app.use(sessionMiddleware);
 app.use(express.static('public'));
-app.use(express.json()); // Handle JSON text payloads
+app.use(express.json());
+io.engine.use(sessionMiddleware);
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 
-// 1. KEY VENDING MACHINE (Generates 10-second key)
-// 1. KEY VENDING MACHINE (Fixed for SDK v3)
-app.get('/auth/deepgram-token', async (req, res) => {
+// --- 1. SOCKET LOGIC (The Live Stream) ---
+io.on('connection', (socket) => {
+    const userId = socket.request.session.userId;
+    if (!userId) { socket.disconnect(); return; }
+
+    console.log(`🔌 Client ${socket.id} connected.`);
+
+    let dgConnection = null;
+    let keepAliveInterval = null;
+
+    // A. Setup Deepgram Connection
+    const setupDeepgram = async () => {
+        try {
+            const settings = await db.getSettings(userId);
+            const keywords = settings?.custom_keywords 
+                ? settings.custom_keywords.split(',').map(k => k.trim() + ":2") 
+                : [];
+
+            dgConnection = deepgram.listen.live({
+                model: "nova-2-medical",
+                language: "en-IN",
+                smart_format: true,
+                interim_results: true,
+                keywords: keywords,
+                // No encoding/sample_rate needed for WebM streams
+            });
+
+            // Events
+            dgConnection.on(LiveTranscriptionEvents.Open, () => {
+                console.log(`🟢 Deepgram Open (${socket.id})`);
+                
+                // KeepAlive Logic (Prevent 10s timeout during silence)
+                keepAliveInterval = setInterval(() => {
+                    if (dgConnection && dgConnection.getReadyState() === 1) {
+                        dgConnection.keepAlive();
+                    }
+                }, 8000);
+            });
+
+            dgConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
+                const transcript = data.channel?.alternatives?.[0]?.transcript;
+                if (transcript) {
+                    socket.emit('transcript-update', { 
+                        text: transcript, 
+                        isFinal: data.is_final 
+                    });
+                }
+            });
+
+            dgConnection.on(LiveTranscriptionEvents.Error, (err) => console.error("DG Error:", err));
+            
+            dgConnection.on(LiveTranscriptionEvents.Close, () => {
+                console.log(`🔴 Deepgram Closed (${socket.id})`);
+                clearInterval(keepAliveInterval);
+                dgConnection = null;
+            });
+
+        } catch (err) {
+            console.error("Setup Error:", err);
+        }
+    };
+
+    // B. Handle Audio Stream
+    socket.on('audio-stream', async (data) => {
+        // Initialize on first chunk
+        if (!dgConnection) {
+            await setupDeepgram();
+        }
+
+        // Send data if ready
+        if (dgConnection && dgConnection.getReadyState() === 1) {
+            dgConnection.send(data);
+        }
+    });
+
+    // C. Finalize & Format
+    socket.on('finalize-prescription', async ({ fullTranscript, context }) => {
+        // Close connection immediately to save costs
+        if (dgConnection) {
+            dgConnection.finish();
+            dgConnection = null;
+        }
+        clearInterval(keepAliveInterval);
+
+        console.log(`📝 Finalizing... Text Length: ${fullTranscript?.length}`);
+
+        // If empty, trigger backup
+        if (!fullTranscript || fullTranscript.trim().length < 2) {
+            socket.emit('use-backup-upload', {}); 
+            return;
+        }
+
+        // Deduct Credit
+        const hasBalance = await db.deductCredit(userId);
+        if (!hasBalance) {
+            socket.emit('prescription-result', { success: false, error: "Low Balance." });
+            return;
+        }
+
+        // Gemini Processing
+        try {
+            const macros = await db.getMacros(userId);
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+            const prompt = generateScribePrompt(fullTranscript, context, macros);
+            const result = await model.generateContent(prompt);
+            const newCredits = await db.getCredits(userId);
+            
+            socket.emit('prescription-result', { 
+                success: true, 
+                html: result.response.text(), 
+                credits: newCredits 
+            });
+        } catch (e) {
+            console.error("AI Error:", e);
+            socket.emit('prescription-result', { success: false, error: "AI Processing Failed" });
+        }
+    });
+
+    socket.on('disconnect', () => {
+        if (dgConnection) dgConnection.finish();
+        clearInterval(keepAliveInterval);
+    });
+});
+
+// --- 2. REST APIs (Settings/Auth) ---
+// (These remain exactly the same as your previous working version)
+
+app.post('/api/login', async (req, res) => {
+    const user = await db.getUser(req.body.phone);
+    if (user && bcrypt.compareSync(req.body.password, user.password)) {
+        req.session.userId = user.id; res.json({ success: true });
+    } else res.json({ success: false, message: "Invalid" });
+});
+app.post('/api/register', async (req, res) => {
+    try { await db.createUser(req.body.phone, req.body.password); res.json({ success: true }); } 
+    catch (e) { res.json({ success: false, message: "Exists" }); }
+});
+app.get('/api/me', async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+    const user = await db.getUserById(req.session.userId);
+    if (!user) { req.session.destroy(); return res.status(401).json({ error: "User not found" }); }
+    const credits = await db.getCredits(req.session.userId);
+    res.json({ phone: user.phone, credits: credits, header_html: user.header_html });
+});
+app.post('/api/header', async (req, res) => { await db.updateHeader(req.session.userId, req.body.html); res.json({ success: true }); });
+app.get('/api/macros', async (req, res) => { if (!req.session.userId) return res.json([]); res.json(await db.getMacros(req.session.userId)); });
+app.post('/api/macros', async (req, res) => { await db.saveMacro(req.session.userId, req.body.trigger, req.body.expansion); res.json({ success: true }); });
+app.get('/settings', async (req, res) => { if (!req.session.userId) return res.status(401).json({}); res.json(await db.getSettings(req.session.userId) || {}); });
+app.post('/settings', async (req, res) => { if (!req.session.userId) return res.status(401).json({}); await db.saveSettings(req.session.userId, req.body); res.json({ success: true }); });
+
+// --- 3. BACKUP UPLOAD ENDPOINT ---
+app.post('/api/process-backup', upload.single('audio'), async (req, res) => {
     try {
-        if (!process.env.DEEPGRAM_PROJECT_ID) throw new Error("Project ID missing in .env");
-        
-        // CORRECTED SYNTAX: Remove .v1.projects.keys
-        const { result, error } = await deepgram.manage.createProjectKey(
-            process.env.DEEPGRAM_PROJECT_ID,
-            {
-                comment: 'Temporary Client Key',
-                scopes: ['usage:write'],
-                time_to_live_in_seconds: 60, // Key expires in 1 min
-            }
+        if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+        if (!req.file) throw new Error("No audio file.");
+
+        await db.deductCredit(req.session.userId);
+
+        const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
+            fs.readFileSync(req.file.path),
+            { model: 'nova-2-medical', smart_format: true, language: 'en-IN', mimetype: 'audio/webm' }
         );
-
         if (error) throw error;
-        res.json({ key: result.key });
-    } catch (err) {
-        console.error("Token Error:", err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// 2. TEXT PROCESSOR (Gemini)
-// Audio never touches this server. Only text.
-app.post('/process-text', async (req, res) => {
-    try {
-        const { transcript, context } = req.body;
-        if (!transcript) throw new Error("No text provided");
-
-        console.log("📝 Formatting Text Length:", transcript.length);
-
-        const macros = await db.getMacros();
+        
+        const transcript = result.results.channels[0].alternatives[0].transcript;
+        const macros = await db.getMacros(req.session.userId);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
-        const prompt = generateScribePrompt(transcript, context, macros);
+        const prompt = generateScribePrompt(transcript, req.body.context || "", macros);
+        const aiRes = await model.generateContent(prompt);
+        
+        fs.unlinkSync(req.file.path);
+        const newCredits = await db.getCredits(req.session.userId);
+        res.json({ success: true, html: aiRes.response.text(), credits: newCredits });
 
-        const aiResult = await model.generateContent(prompt);
-        const html = aiResult.response.text();
-
-        res.json({ success: true, raw: html });
-
-    } catch (err) {
-        console.error("Gemini Error:", err);
-        res.status(500).json({ success: false, error: err.message });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
-
-// --- SETTINGS/MACROS (Standard DB Calls) ---
-app.get('/settings', async (req, res) => res.json(await db.getSettings()));
-app.post('/settings', async (req, res) => { await db.saveSettings(req.body); res.json({ success: true }); });
-app.get('/macros', async (req, res) => res.json(await db.getMacros()));
-app.post('/macros', async (req, res) => { await db.saveMacro(req.body.trigger, req.body.expansion); res.json({ success: true }); });
 
 const PORT = 3000;
-app.listen(PORT, () => console.log(`\n🚀 Lightweight Server running on port ${PORT}\n`));
+httpServer.listen(PORT, () => console.log(`\n🚀 SmartRx Pro running on port ${PORT}\n`));

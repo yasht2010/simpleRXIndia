@@ -1,109 +1,149 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Use Absolute Path for persistence on Cloud servers
 const dbPath = path.join(__dirname, 'smartrx.db');
 
 const db = new sqlite3.Database(dbPath);
 
 db.serialize(() => {
-    // 1. Macros Table
-    db.run(`CREATE TABLE IF NOT EXISTS macros (
+    // 1. Users Table (Now with ALL fields)
+    db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        trigger_phrase TEXT UNIQUE,
-        expansion TEXT
-    )`);
-
-    // 2. Settings Table
-    db.run(`CREATE TABLE IF NOT EXISTS settings (
-        id INTEGER PRIMARY KEY,
+        phone TEXT UNIQUE,
+        password TEXT,
+        credits INTEGER DEFAULT 50,
+        header_html TEXT,
+        custom_keywords TEXT,
         doctor_name TEXT,
         qualification TEXT,
         reg_no TEXT,
         clinic_details TEXT,
-        custom_keywords TEXT
-    )`);
-
-    // Seed Default Settings
-    db.get("SELECT count(*) as count FROM settings", (err, row) => {
-        if (row && row.count === 0) {
-            db.run(`INSERT INTO settings (id, doctor_name, qualification, reg_no, clinic_details, custom_keywords) 
-                VALUES (1, 'Dr. Rajesh Kumar', 'MBBS, MD', 'NMC-12345', 'LifeCare Clinic, MG Road', 'Urimax, Drotin, Niftas, Cital')`);
-        }
-    });
-    
-    // 3. Rx History Table (For Links)
-    db.run(`CREATE TABLE IF NOT EXISTS prescriptions (
-        id TEXT PRIMARY KEY,
-        doctor_name TEXT,
-        patient_name TEXT,
-        content_html TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+
+    // 2. Macros Table
+    db.run(`CREATE TABLE IF NOT EXISTS macros (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        trigger_phrase TEXT,
+        expansion TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )`);
+    
+    // 3. Admin Seed (Fixed to match new schema)
+    db.get("SELECT * FROM users WHERE phone = '9999999999'", (err, row) => {
+        if (!row) {
+            const hash = bcrypt.hashSync("admin123", 10);
+            db.run(`INSERT INTO users (phone, password, credits, doctor_name, header_html) 
+                VALUES ('9999999999', '${hash}', 100, 'Dr. Admin', '<h1>Dr. Admin</h1><p>System User</p>')`);
+        }
+    });
 });
 
-// --- HELPER FUNCTIONS ---
+// --- USER FUNCTIONS ---
 
-export const getSettings = () => {
+export const getUser = (phone) => {
     return new Promise((resolve, reject) => {
-        db.get("SELECT * FROM settings WHERE id = 1", (err, row) => {
-            if (err) reject(err);
-            else resolve(row || {});
+        db.get("SELECT * FROM users WHERE phone = ?", [phone], (err, row) => {
+            if (err) reject(err); else resolve(row);
         });
     });
 };
 
-export const saveSettings = (data) => {
+export const getUserById = (id) => {
+    return new Promise((resolve, reject) => {
+        db.get("SELECT * FROM users WHERE id = ?", [id], (err, row) => {
+            if (err) reject(err); else resolve(row);
+        });
+    });
+};
+
+export const createUser = (phone, password) => {
+    return new Promise((resolve, reject) => {
+        const hash = bcrypt.hashSync(password, 10);
+        const defaultHeader = `<h1>Dr. ${phone}</h1><p>MBBS</p>`;
+        db.run("INSERT INTO users (phone, password, header_html, doctor_name) VALUES (?, ?, ?, ?)", 
+            [phone, hash, defaultHeader, `Dr. ${phone}`], function(err) {
+            if (err) reject(err); else resolve(this.lastID);
+        });
+    });
+};
+
+export const updateHeader = (userId, html) => {
+    return new Promise((resolve, reject) => {
+        db.run("UPDATE users SET header_html = ? WHERE id = ?", [html, userId], (err) => {
+            if (err) reject(err); else resolve(true);
+        });
+    });
+};
+
+// --- SETTINGS FUNCTIONS (Fixed) ---
+
+export const getSettings = (userId) => {
+    return new Promise((resolve, reject) => {
+        db.get("SELECT header_html, custom_keywords, doctor_name, qualification, reg_no, clinic_details FROM users WHERE id = ?", [userId], (err, row) => {
+            if (err) reject(err); 
+            else resolve(row);
+        });
+    });
+};
+
+export const saveSettings = (userId, data) => {
     return new Promise((resolve, reject) => {
         const { doctor_name, qualification, reg_no, clinic_details, custom_keywords } = data;
-        db.run(`UPDATE settings SET doctor_name=?, qualification=?, reg_no=?, clinic_details=?, custom_keywords=? WHERE id=1`, 
-            [doctor_name, qualification, reg_no, clinic_details, custom_keywords], 
+        
+        // Update all fields
+        db.run(`UPDATE users SET 
+            doctor_name=?, qualification=?, reg_no=?, clinic_details=?, custom_keywords=? 
+            WHERE id=?`, 
+            [doctor_name, qualification, reg_no, clinic_details, custom_keywords, userId], 
             (err) => {
-                if (err) reject(err);
-                else resolve(true);
+                if (err) reject(err); else resolve(true);
             }
         );
     });
 };
 
-export const getMacros = () => {
+// --- WALLET FUNCTIONS ---
+
+export const getCredits = (userId) => {
     return new Promise((resolve, reject) => {
-        db.all("SELECT trigger_phrase, expansion FROM macros", (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows || []);
+        db.get("SELECT credits FROM users WHERE id = ?", [userId], (err, row) => {
+            if (err) reject(err); else resolve(row ? row.credits : 0);
         });
     });
 };
 
-export const saveMacro = (trigger, expansion) => {
+export const deductCredit = (userId) => {
     return new Promise((resolve, reject) => {
-        db.run("INSERT OR REPLACE INTO macros (trigger_phrase, expansion) VALUES (?, ?)", 
-            [trigger, expansion], (err) => {
+        db.run("UPDATE users SET credits = credits - 10 WHERE id = ? AND credits >= 10", [userId], function(err) {
             if (err) reject(err);
-            else resolve(true);
+            else resolve(this.changes > 0); 
         });
     });
 };
 
-export const savePrescription = (id, docName, patName, html) => {
+// --- MACRO FUNCTIONS ---
+
+export const getMacros = (userId) => {
     return new Promise((resolve, reject) => {
-        db.run("INSERT INTO prescriptions (id, doctor_name, patient_name, content_html) VALUES (?, ?, ?, ?)", 
-            [id, docName, patName, html], (err) => {
-            if (err) reject(err);
-            else resolve(id);
+        db.all("SELECT trigger_phrase, expansion FROM macros WHERE user_id = ?", [userId], (err, rows) => {
+            if (err) reject(err); else resolve(rows || []);
         });
     });
 };
 
-export const getPrescription = (id) => {
+export const saveMacro = (userId, trigger, expansion) => {
     return new Promise((resolve, reject) => {
-        db.get("SELECT * FROM prescriptions WHERE id = ?", [id], (err, row) => {
-            if (err) reject(err);
-            else resolve(row);
+        db.run("DELETE FROM macros WHERE user_id = ? AND trigger_phrase = ?", [userId, trigger], () => {
+            db.run("INSERT INTO macros (user_id, trigger_phrase, expansion) VALUES (?, ?, ?)", 
+                [userId, trigger, expansion], (err) => {
+                if (err) reject(err); else resolve(true);
+            });
         });
     });
 };
