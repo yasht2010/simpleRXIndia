@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartRx</title>
+    <title>Clinova Rx</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FIX: Use CDN for Socket.io Client to prevent loading errors -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>@media print { .no-print { display: none !important; } body { background: white; } .print-area { border: none; box-shadow: none; padding: 0; } }</style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 font-sans">
@@ -23,7 +25,10 @@
             </div>
         </div>
 
-        <!-- EDITOR (Placeholders handled via CSS mostly, but simple text works) -->
+        <!-- LIVE PREVIEW -->
+        <div id="livePreview" class="px-8 pt-4 text-gray-400 text-sm italic min-h-[24px]"></div>
+
+        <!-- EDITOR -->
         <div id="content" contenteditable="true" class="p-8 flex-grow prose max-w-none focus:outline-none">
             <p class="text-gray-300 italic no-print" id="placeholder">Press Spacebar to dictate...</p>
         </div>
@@ -33,9 +38,6 @@
             <div class="flex justify-center mb-4 gap-4 items-center">
                 <button id="recordBtn" class="bg-red-600 hover:bg-red-700 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                </button>
-                <button id="retryBtn" onclick="retryLastRecording()" class="hidden bg-yellow-500 hover:bg-yellow-600 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                 </button>
             </div>
             <p id="status" class="text-center text-xs text-gray-500 font-bold mb-4">READY</p>
@@ -53,59 +55,152 @@
         </div>
     </div>
 
-    <!-- SETTINGS MODAL -->
+    <!-- Modals (Simplified) -->
     <div id="settingsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 no-print">
-        <div class="bg-white rounded-lg p-6 w-full max-w-lg shadow-2xl">
-            <h2 class="text-xl font-bold mb-4">Doctor Settings</h2>
-            <div class="space-y-3">
-                <input id="in_name" placeholder="Dr. Name" class="w-full border p-2 rounded">
-                <input id="in_qual" placeholder="Qualifications" class="w-full border p-2 rounded">
-                <input id="in_reg" placeholder="Reg No" class="w-full border p-2 rounded">
-                <textarea id="in_clinic" placeholder="Clinic Address & Phone" class="w-full border p-2 rounded h-20"></textarea>
-                <label class="block text-xs font-bold text-gray-600 mt-4">Custom Dictionary (Comma separated)</label>
-                <textarea id="in_keywords" placeholder="Urimax, Drotin..." class="w-full border p-2 rounded h-20 bg-yellow-50"></textarea>
-            </div>
-            <div class="flex justify-end gap-2 mt-4">
+        <div class="bg-white rounded p-6 w-full max-w-lg shadow-xl">
+            <h2 class="font-bold mb-4">Settings</h2>
+            <input id="in_name" placeholder="Name" class="w-full border p-2 mb-2 rounded">
+            <input id="in_qual" placeholder="Qualifications" class="w-full border p-2 mb-2 rounded">
+            <input id="in_reg" placeholder="Reg No" class="w-full border p-2 mb-2 rounded">
+            <textarea id="in_clinic" placeholder="Clinic Address" class="w-full border p-2 mb-2 rounded"></textarea>
+            <input id="in_keywords" placeholder="Keywords (Brand names)" class="w-full border p-2 mb-2 bg-yellow-50 rounded">
+            <div class="flex justify-end gap-2">
                 <button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="px-4 py-2 text-gray-600">Cancel</button>
-                <button onclick="saveSettings()" class="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
+                <button onclick="saveSettings()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
             </div>
         </div>
     </div>
 
-    <!-- MACRO MODAL -->
     <div id="macroModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 no-print">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md shadow-2xl">
-            <h2 class="text-xl font-bold mb-4">Manage Macros</h2>
-            <input id="macroTrigger" placeholder="Trigger (e.g. Protocol Fever)" class="w-full border p-2 rounded mb-2">
-            <textarea id="macroExpansion" placeholder="Expansion..." class="w-full border p-2 rounded h-24 mb-4"></textarea>
+        <div class="bg-white rounded p-6 w-full max-w-md shadow-xl">
+            <h2 class="font-bold mb-4">Macros</h2>
+            <input id="macroTrigger" placeholder="Trigger (e.g. Fever Protocol)" class="w-full border p-2 mb-2 rounded">
+            <textarea id="macroExpansion" placeholder="Expansion..." class="w-full border p-2 mb-2 rounded h-20"></textarea>
             <div class="flex justify-end gap-2">
                 <button onclick="document.getElementById('macroModal').classList.add('hidden')" class="px-4 py-2 text-gray-600">Close</button>
-                <button onclick="saveMacro()" class="px-4 py-2 bg-blue-600 text-white rounded">Save New</button>
+                <button onclick="saveMacro()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
             </div>
-            <div id="macroList" class="mt-4 pt-4 border-t text-xs text-gray-600 h-32 overflow-y-auto"></div>
+            <div id="macroList" class="mt-4 pt-4 border-t text-xs h-32 overflow-y-auto"></div>
         </div>
     </div>
 
     <script>
-        const getApiBase = () => (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'http://localhost:3000';
+        // --- CONFIGURATION ---
+        const getApiBase = () => {
+            // 1. Handle Blob/Preview environments (The Fix for 'Failed to parse URL')
+            if (window.location.protocol === 'blob:' || window.location.origin === 'null') {
+                return 'http://localhost:3000';
+            }
+            
+            // 2. Handle Localhost vs Production
+            const host = window.location.hostname;
+            if (host === 'localhost' || host === '127.0.0.1') {
+                // If we are served by the backend (port 3000), relative path '' is best.
+                // If we are served by something else (like Vite 5173), force 3000.
+                return window.location.port === '3000' ? '' : 'http://localhost:3000';
+            }
+            
+            // 3. Production (Render/AWS) - Use relative path
+            return '';
+        };
         const API_BASE = getApiBase();
 
-        window.onload = () => loadSettings().catch(err => console.warn("Backend not ready:", err));
+        // Connect to Socket (Pass URL explicitly if not relative)
+        const socket = API_BASE ? io(API_BASE) : io();
+        
+        let mediaRecorder, isRecording = false, audioContext, processor, input, globalStream, transcriptBuffer = "";
+        
+        const btn = document.getElementById('recordBtn');
+        const status = document.getElementById('status');
+        const preview = document.getElementById('livePreview');
+        const content = document.getElementById('content');
 
-        async function loadSettings() {
-            const res = await fetch(`${API_BASE}/settings`);
-            const data = await res.json();
-            document.getElementById('h_name').innerText = data.doctor_name || "Dr. Name";
-            document.getElementById('h_qual').innerText = data.qualification || "";
-            document.getElementById('h_reg').innerText = "Reg: " + (data.reg_no || "");
-            document.getElementById('h_clinic').innerText = data.clinic_details || "";
-            document.getElementById('in_name').value = data.doctor_name || "";
-            document.getElementById('in_qual').value = data.qualification || "";
-            document.getElementById('in_reg').value = data.reg_no || "";
-            document.getElementById('in_clinic').value = data.clinic_details || "";
-            document.getElementById('in_keywords').value = data.custom_keywords || "";
+        // Socket Events
+        socket.on('transcript-update', (data) => {
+            if(data.isFinal) { transcriptBuffer += " " + data.text; preview.innerText = ""; }
+            else { preview.innerText = data.text; }
+        });
+
+        socket.on('prescription-result', (data) => {
+            status.innerText = "DONE";
+            status.className = "text-center text-xs text-green-600 font-bold mb-4";
+            btn.classList.remove('animate-pulse', 'bg-red-500', 'ring-4');
+            if(data.success) content.innerHTML = data.html;
+            else alert("Error: " + data.error);
+        });
+
+        // Audio Recording (16kHz Streaming)
+        async function startRecording() {
+            if(isRecording) return;
+            transcriptBuffer = "";
+            try {
+                globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                input = audioContext.createMediaStreamSource(globalStream);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+                input.connect(processor);
+                processor.connect(audioContext.destination);
+
+                processor.onaudioprocess = (e) => {
+                    if(!isRecording) return;
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    const int16Data = new Int16Array(inputData.length);
+                    for (let i=0; i<inputData.length; i++) {
+                        let s = Math.max(-1, Math.min(1, inputData[i]));
+                        int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+                    socket.emit('audio-stream', int16Data.buffer);
+                };
+
+                isRecording = true;
+                btn.classList.add('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
+                status.innerText = "LISTENING LIVE...";
+                status.className = "text-center text-xs text-red-600 font-bold mb-4";
+            } catch(e) { alert("Mic Error: " + e.message); }
         }
 
+        function stopRecording() {
+            if(!isRecording) return;
+            isRecording = false;
+            if(globalStream) globalStream.getTracks().forEach(t => t.stop());
+            if(processor) processor.disconnect();
+            if(input) input.disconnect();
+            if(audioContext) audioContext.close();
+
+            btn.classList.remove('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
+            status.innerText = "FORMATTING...";
+            status.className = "text-center text-xs text-blue-600 font-bold mb-4";
+
+            // Send context + transcript
+            const cleanContext = document.getElementById('placeholder') ? "" : content.innerHTML;
+            socket.emit('finalize-prescription', { fullTranscript: transcriptBuffer, context: cleanContext });
+        }
+
+        // Interactions
+        btn.addEventListener('mousedown', startRecording);
+        btn.addEventListener('mouseup', stopRecording);
+        btn.addEventListener('touchstart', (e)=>{e.preventDefault(); startRecording()});
+        btn.addEventListener('touchend', (e)=>{e.preventDefault(); stopRecording()});
+        document.addEventListener('keydown', (e) => { if(e.code==='Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') startRecording(); });
+        document.addEventListener('keyup', (e) => { if(e.code==='Space') stopRecording(); });
+
+        // Init Settings
+        window.onload = loadSettings;
+        async function loadSettings() {
+            try {
+                const res = await fetch(`${API_BASE}/settings`);
+                const data = await res.json();
+                document.getElementById('h_name').innerText = data.doctor_name || "Dr. Name";
+                document.getElementById('h_qual').innerText = data.qualification || "";
+                document.getElementById('h_reg').innerText = "Reg: " + (data.reg_no || "");
+                document.getElementById('h_clinic').innerText = data.clinic_details || "";
+                document.getElementById('in_name').value = data.doctor_name || "";
+                document.getElementById('in_qual').value = data.qualification || "";
+                document.getElementById('in_reg').value = data.reg_no || "";
+                document.getElementById('in_clinic').value = data.clinic_details || "";
+                document.getElementById('in_keywords').value = data.custom_keywords || "";
+            } catch (err) { console.warn("Settings load failed (Backend offline?)", err); }
+        }
         async function saveSettings() {
             const data = {
                 doctor_name: document.getElementById('in_name').value,
@@ -118,116 +213,17 @@
             document.getElementById('settingsModal').classList.add('hidden');
             loadSettings();
         }
-
-        // --- RECORDING LOGIC ---
-        const btn = document.getElementById('recordBtn');
-        const retryBtn = document.getElementById('retryBtn');
-        const status = document.getElementById('status');
-        const content = document.getElementById('content');
-        
-        let mediaRecorder;
-        let audioChunks = [];
-        let isRecording = false;
-        let lastAudioBlob = null;
-
-        async function startRecording() {
-            if(isRecording) return;
-            lastAudioBlob = null;
-            retryBtn.classList.add('hidden');
-            
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                    lastAudioBlob = blob;
-                    processAudio(blob);
-                };
-                mediaRecorder.start();
-                isRecording = true;
-                btn.classList.add('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
-                status.innerText = "LISTENING...";
-                status.className = "text-center text-xs text-red-600 font-bold mb-4";
-            } catch(e) { alert("Mic Error: " + e.message); }
-        }
-
-        function stopRecording() {
-            if(!isRecording) return;
-            mediaRecorder.stop();
-            isRecording = false;
-            btn.classList.remove('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
-            status.innerText = "PROCESSING...";
-            status.className = "text-center text-xs text-blue-600 font-bold mb-4";
-        }
-
-        function retryLastRecording() {
-            if (lastAudioBlob) {
-                status.innerText = "RETRYING...";
-                status.className = "text-center text-xs text-yellow-600 font-bold mb-4";
-                processAudio(lastAudioBlob);
-            }
-        }
-
-        async function processAudio(blob) {
-            retryBtn.classList.add('hidden');
-            
-            // Get CURRENT HTML to send as context
-            const currentHTML = content.innerHTML;
-            const hasPlaceholder = document.getElementById('placeholder');
-            const cleanContext = hasPlaceholder ? "" : currentHTML;
-
-            const formData = new FormData();
-            formData.append('audio', blob, 'recording.webm');
-            formData.append('context', cleanContext); // SEND CONTEXT
-
-            try {
-                const res = await fetch(`${API_BASE}/process-audio`, { method: 'POST', body: formData });
-                const data = await res.json();
-                
-                if(data.success) {
-                    content.innerHTML = data.raw;
-                    status.innerText = "DONE";
-                    status.className = "text-center text-xs text-green-600 font-bold mb-4";
-                } else {
-                    throw new Error(data.error || "Server Error");
-                }
-            } catch(e) { 
-                console.error(e);
-                status.innerText = "FAILED - TAP RETRY ↺";
-                status.className = "text-center text-xs text-red-600 font-bold mb-4";
-                retryBtn.classList.remove('hidden');
-            }
-        }
-
-        // Events
-        btn.addEventListener('mousedown', startRecording);
-        btn.addEventListener('mouseup', stopRecording);
-        btn.addEventListener('touchstart', (e)=>{e.preventDefault(); startRecording()});
-        btn.addEventListener('touchend', (e)=>{e.preventDefault(); stopRecording()});
-        document.addEventListener('keydown', (e) => { if(e.code==='Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') startRecording(); });
-        document.addEventListener('keyup', (e) => { if(e.code==='Space') stopRecording(); });
-
-        // Macros Logic
         function openSettings() { document.getElementById('settingsModal').classList.remove('hidden'); }
         function openMacros() { 
             document.getElementById('macroModal').classList.remove('hidden'); 
-            fetch(`${API_BASE}/macros`).then(r=>r.json()).then(d => {
-                document.getElementById('macroList').innerHTML = d.map(m => `<div class="border-b py-1"><b>${m.trigger_phrase}:</b> ${m.expansion}</div>`).join('');
-            });
+            fetch(`${API_BASE}/macros`).then(r=>r.json()).then(d => document.getElementById('macroList').innerHTML = d.map(m => `<div class="border-b py-1"><b>${m.trigger_phrase}:</b> ${m.expansion}</div>`).join(''));
         }
         async function saveMacro() {
             await fetch(`${API_BASE}/macros`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    trigger: document.getElementById('macroTrigger').value,
-                    expansion: document.getElementById('macroExpansion').value
-                })
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ trigger: document.getElementById('macroTrigger').value, expansion: document.getElementById('macroExpansion').value })
             });
-            document.getElementById('macroTrigger').value = '';
-            document.getElementById('macroExpansion').value = '';
+            document.getElementById('macroTrigger').value = ''; document.getElementById('macroExpansion').value = '';
             openMacros();
         }
     </script>
