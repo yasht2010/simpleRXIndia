@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clinova Rx</title>
+    <title>SmartRx</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FIX: Use CDN for Socket.io Client to prevent loading errors -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
@@ -87,25 +87,17 @@
     <script>
         // --- CONFIGURATION ---
         const getApiBase = () => {
-            // 1. Handle Blob/Preview environments (The Fix for 'Failed to parse URL')
             if (window.location.protocol === 'blob:' || window.location.origin === 'null') {
                 return 'http://localhost:3000';
             }
-            
-            // 2. Handle Localhost vs Production
             const host = window.location.hostname;
             if (host === 'localhost' || host === '127.0.0.1') {
-                // If we are served by the backend (port 3000), relative path '' is best.
-                // If we are served by something else (like Vite 5173), force 3000.
                 return window.location.port === '3000' ? '' : 'http://localhost:3000';
             }
-            
-            // 3. Production (Render/AWS) - Use relative path
             return '';
         };
         const API_BASE = getApiBase();
 
-        // Connect to Socket (Pass URL explicitly if not relative)
         const socket = API_BASE ? io(API_BASE) : io();
         
         let mediaRecorder, isRecording = false, audioContext, processor, input, globalStream, transcriptBuffer = "";
@@ -129,26 +121,35 @@
             else alert("Error: " + data.error);
         });
 
-        // Audio Recording (16kHz Streaming)
+        // --- AUDIO PROCESSING: DOWNSAMPLE TO 16kHz ---
         async function startRecording() {
             if(isRecording) return;
             transcriptBuffer = "";
             try {
+                // 1. Get User Media (Native Sample Rate)
                 globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioContext = new AudioContext({ sampleRate: 16000 });
-                input = audioContext.createMediaStreamSource(globalStream);
+                
+                // 2. Create Audio Context (Let browser decide rate initially)
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(globalStream);
+                
+                // 3. Setup Processor
                 processor = audioContext.createScriptProcessor(4096, 1, 1);
-                input.connect(processor);
+                
+                source.connect(processor);
                 processor.connect(audioContext.destination);
 
                 processor.onaudioprocess = (e) => {
                     if(!isRecording) return;
                     const inputData = e.inputBuffer.getChannelData(0);
-                    const int16Data = new Int16Array(inputData.length);
-                    for (let i=0; i<inputData.length; i++) {
-                        let s = Math.max(-1, Math.min(1, inputData[i]));
-                        int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                    }
+                    
+                    // 4. Downsample Logic (Native -> 16000)
+                    const downsampledData = downsampleBuffer(inputData, audioContext.sampleRate, 16000);
+                    
+                    // 5. Convert to Int16 (Deepgram expects Linear16)
+                    const int16Data = convertFloat32ToInt16(downsampledData);
+                    
+                    // 6. Send
                     socket.emit('audio-stream', int16Data.buffer);
                 };
 
@@ -159,12 +160,46 @@
             } catch(e) { alert("Mic Error: " + e.message); }
         }
 
+        // Helper: Downsample
+        function downsampleBuffer(buffer, sampleRate, outSampleRate) {
+            if (outSampleRate === sampleRate) return buffer;
+            if (outSampleRate > sampleRate) return buffer; // Should not happen
+            const sampleRateRatio = sampleRate / outSampleRate;
+            const newLength = Math.round(buffer.length / sampleRateRatio);
+            const result = new Float32Array(newLength);
+            let offsetResult = 0;
+            let offsetBuffer = 0;
+            while (offsetResult < result.length) {
+                const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+                let accum = 0, count = 0;
+                for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+                    accum += buffer[i]; count++;
+                }
+                result[offsetResult] = accum / count;
+                offsetResult++;
+                offsetBuffer = nextOffsetBuffer;
+            }
+            return result;
+        }
+
+        // Helper: Float32 -> Int16
+        function convertFloat32ToInt16(buffer) {
+            let l = buffer.length;
+            const buf = new Int16Array(l);
+            while (l--) {
+                // Clamp to [-1, 1] then convert
+                buf[l] = Math.min(1, Math.max(-1, buffer[l])) * 0x7FFF;
+            }
+            return buf;
+        }
+
         function stopRecording() {
             if(!isRecording) return;
             isRecording = false;
+            
+            // Cleanup
             if(globalStream) globalStream.getTracks().forEach(t => t.stop());
             if(processor) processor.disconnect();
-            if(input) input.disconnect();
             if(audioContext) audioContext.close();
 
             btn.classList.remove('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
