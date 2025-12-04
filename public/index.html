@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SmartRx</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FIX: Use CDN for Socket.io Client to prevent loading errors -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>@media print { .no-print { display: none !important; } body { background: white; } .print-area { border: none; box-shadow: none; padding: 0; } }</style>
 </head>
 <body class="bg-gray-100 min-h-screen p-4 font-sans">
@@ -25,9 +23,6 @@
             </div>
         </div>
 
-        <!-- LIVE PREVIEW -->
-        <div id="livePreview" class="px-8 pt-4 text-gray-400 text-sm italic min-h-[24px]"></div>
-
         <!-- EDITOR -->
         <div id="content" contenteditable="true" class="p-8 flex-grow prose max-w-none focus:outline-none">
             <p class="text-gray-300 italic no-print" id="placeholder">Press Spacebar to dictate...</p>
@@ -36,14 +31,16 @@
         <!-- FOOTER -->
         <div class="bg-gray-50 p-4 border-t no-print">
             <div class="flex justify-center mb-4 gap-4 items-center">
-                <div class="relative">
-                    <!-- Volume Indicator Ring -->
-                    <div id="volMeter" class="absolute inset-0 rounded-full border-4 border-transparent transition-all duration-75"></div>
-                    
-                    <button id="recordBtn" class="relative z-10 bg-red-600 hover:bg-red-700 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                    </button>
-                </div>
+                
+                <!-- Record Button -->
+                <button id="recordBtn" class="bg-red-600 hover:bg-red-700 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                </button>
+
+                <!-- Retry Button (Hidden) -->
+                <button id="retryBtn" onclick="retryLast()" class="hidden bg-yellow-500 text-white w-12 h-12 rounded-full shadow-lg animate-bounce flex items-center justify-center">
+                    ↺
+                </button>
             </div>
             <p id="status" class="text-center text-xs text-gray-500 font-bold mb-4">READY</p>
             
@@ -60,7 +57,7 @@
         </div>
     </div>
 
-    <!-- Modals (Simplified) -->
+    <!-- SETTINGS / MACROS MODALS (Same as before) -->
     <div id="settingsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 no-print">
         <div class="bg-white rounded p-6 w-full max-w-lg shadow-xl">
             <h2 class="font-bold mb-4">Settings</h2>
@@ -90,156 +87,88 @@
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        const getApiBase = () => {
-            if (window.location.protocol === 'blob:' || window.location.origin === 'null') {
-                return 'http://localhost:3000';
-            }
-            const host = window.location.hostname;
-            if (host === 'localhost' || host === '127.0.0.1') {
-                return window.location.port === '3000' ? '' : 'http://localhost:3000';
-            }
-            return '';
-        };
-        const API_BASE = getApiBase();
-
-        const socket = API_BASE ? io(API_BASE) : io();
+        const API_BASE = ''; // Relative path for reliability
         
-        let mediaRecorder, isRecording = false, audioContext, processor, input, globalStream, transcriptBuffer = "";
+        let mediaRecorder, audioChunks = [], isRecording = false, lastBlob = null;
         
         const btn = document.getElementById('recordBtn');
         const status = document.getElementById('status');
-        const preview = document.getElementById('livePreview');
         const content = document.getElementById('content');
-        const volMeter = document.getElementById('volMeter');
+        const retryBtn = document.getElementById('retryBtn');
 
-        // Socket Events
-        socket.on('transcript-update', (data) => {
-            if(data.isFinal) { transcriptBuffer += " " + data.text; preview.innerText = ""; }
-            else { preview.innerText = data.text; }
-        });
-
-        socket.on('prescription-result', (data) => {
-            status.innerText = "DONE";
-            status.className = "text-center text-xs text-green-600 font-bold mb-4";
-            btn.classList.remove('animate-pulse', 'bg-red-500', 'ring-4');
-            volMeter.style.borderColor = 'transparent'; // Reset volume
-            if(data.success) content.innerHTML = data.html;
-            else alert("Error: " + data.error);
-        });
-
-        // --- AUDIO PROCESSING: DOWNSAMPLE TO 16kHz ---
+        // --- SIMPLE RECORDING LOGIC ---
         async function startRecording() {
             if(isRecording) return;
-            transcriptBuffer = "";
+            lastBlob = null;
+            retryBtn.classList.add('hidden');
+            
             try {
-                // 1. Get User Media
-                globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream); // Let browser choose format (WebM)
+                audioChunks = [];
                 
-                // 2. Audio Context (Force 16k if possible)
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioContext = new AudioContext({ sampleRate: 16000 });
-                
-                // CRITICAL FIX: Resume Audio Context if suspended (Common Browser Issue)
-                if (audioContext.state === 'suspended') {
-                    await audioContext.resume();
-                }
-
-                input = audioContext.createMediaStreamSource(globalStream);
-                processor = audioContext.createScriptProcessor(4096, 1, 1);
-                
-                input.connect(processor);
-                processor.connect(audioContext.destination);
-
-                processor.onaudioprocess = (e) => {
-                    if(!isRecording) return;
-                    const inputData = e.inputBuffer.getChannelData(0);
-                    
-                    // Visual Volume Feedback
-                    updateVolumeMeter(inputData);
-
-                    // Downsample & Convert
-                    const downsampledData = downsampleBuffer(inputData, audioContext.sampleRate, 16000);
-                    const int16Data = convertFloat32ToInt16(downsampledData);
-                    
-                    socket.emit('audio-stream', int16Data.buffer);
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                    lastBlob = blob;
+                    uploadAudio(blob);
                 };
 
+                mediaRecorder.start();
                 isRecording = true;
-                btn.classList.add('bg-red-500', 'animate-pulse');
-                status.innerText = "LISTENING LIVE...";
+                
+                // UI
+                btn.classList.add('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
+                status.innerText = "LISTENING...";
                 status.className = "text-center text-xs text-red-600 font-bold mb-4";
             } catch(e) { alert("Mic Error: " + e.message); }
         }
 
-        function updateVolumeMeter(data) {
-            let sum = 0;
-            for(let i=0; i<data.length; i+=100) sum += Math.abs(data[i]);
-            const avg = sum / (data.length/100);
-            const scale = Math.min(1, avg * 5); // Amplify for visibility
-            if(scale > 0.01) {
-                volMeter.style.borderColor = `rgba(220, 38, 38, ${scale})`;
-                volMeter.style.transform = `scale(${1 + scale/3})`;
-            } else {
-                volMeter.style.borderColor = 'transparent';
-                volMeter.style.transform = 'scale(1)';
-            }
-        }
-
-        // Helper: Downsample
-        function downsampleBuffer(buffer, sampleRate, outSampleRate) {
-            if (outSampleRate === sampleRate) return buffer;
-            if (outSampleRate > sampleRate) return buffer; 
-            const sampleRateRatio = sampleRate / outSampleRate;
-            const newLength = Math.round(buffer.length / sampleRateRatio);
-            const result = new Float32Array(newLength);
-            let offsetResult = 0;
-            let offsetBuffer = 0;
-            while (offsetResult < result.length) {
-                const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
-                let accum = 0, count = 0;
-                for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
-                    accum += buffer[i]; count++;
-                }
-                result[offsetResult] = accum / count;
-                offsetResult++;
-                offsetBuffer = nextOffsetBuffer;
-            }
-            return result;
-        }
-
-        // Helper: Float32 -> Int16
-        function convertFloat32ToInt16(buffer) {
-            let l = buffer.length;
-            const buf = new Int16Array(l);
-            while (l--) {
-                // Clamp to [-1, 1] then convert
-                buf[l] = Math.min(1, Math.max(-1, buffer[l])) * 0x7FFF;
-            }
-            return buf;
-        }
-
         function stopRecording() {
             if(!isRecording) return;
+            mediaRecorder.stop();
             isRecording = false;
             
-            // Cleanup
-            if(globalStream) globalStream.getTracks().forEach(t => t.stop());
-            if(processor) processor.disconnect();
-            if(input) input.disconnect();
-            if(audioContext) audioContext.close();
-
-            btn.classList.remove('bg-red-500', 'animate-pulse');
-            volMeter.style.borderColor = 'transparent'; // Reset ring
-            status.innerText = "FORMATTING...";
+            // UI
+            btn.classList.remove('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
+            status.innerText = "PROCESSING...";
             status.className = "text-center text-xs text-blue-600 font-bold mb-4";
-
-            // Send context + transcript
-            const cleanContext = document.getElementById('placeholder') ? "" : content.innerHTML;
-            socket.emit('finalize-prescription', { fullTranscript: transcriptBuffer, context: cleanContext });
         }
 
-        // Interactions
+        async function uploadAudio(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob, 'rec.webm');
+            // Send existing text so AI can MERGE
+            formData.append('context', document.getElementById('placeholder') ? "" : content.innerHTML);
+
+            try {
+                const res = await fetch(`${API_BASE}/process-audio`, { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                if (data.success) {
+                    content.innerHTML = data.raw;
+                    status.innerText = "DONE";
+                    status.className = "text-center text-xs text-green-600 font-bold mb-4";
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                console.error(err);
+                status.innerText = "FAILED - RETRY?";
+                status.className = "text-center text-xs text-red-600 font-bold mb-4";
+                retryBtn.classList.remove('hidden');
+            }
+        }
+
+        function retryLast() {
+            if(lastBlob) {
+                status.innerText = "RETRYING...";
+                retryBtn.classList.add('hidden');
+                uploadAudio(lastBlob);
+            }
+        }
+
+        // --- BUTTON EVENTS ---
         btn.addEventListener('mousedown', startRecording);
         btn.addEventListener('mouseup', stopRecording);
         btn.addEventListener('touchstart', (e)=>{e.preventDefault(); startRecording()});
@@ -247,7 +176,7 @@
         document.addEventListener('keydown', (e) => { if(e.code==='Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') startRecording(); });
         document.addEventListener('keyup', (e) => { if(e.code==='Space') stopRecording(); });
 
-        // Init Settings
+        // --- SETTINGS (Load/Save) ---
         window.onload = loadSettings;
         async function loadSettings() {
             try {
@@ -257,12 +186,13 @@
                 document.getElementById('h_qual').innerText = data.qualification || "";
                 document.getElementById('h_reg').innerText = "Reg: " + (data.reg_no || "");
                 document.getElementById('h_clinic').innerText = data.clinic_details || "";
+                
                 document.getElementById('in_name').value = data.doctor_name || "";
                 document.getElementById('in_qual').value = data.qualification || "";
                 document.getElementById('in_reg').value = data.reg_no || "";
                 document.getElementById('in_clinic').value = data.clinic_details || "";
                 document.getElementById('in_keywords').value = data.custom_keywords || "";
-            } catch (err) { console.warn("Settings load failed (Backend offline?)", err); }
+            } catch(e) {}
         }
         async function saveSettings() {
             const data = {
