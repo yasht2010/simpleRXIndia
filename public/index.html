@@ -36,9 +36,14 @@
         <!-- FOOTER -->
         <div class="bg-gray-50 p-4 border-t no-print">
             <div class="flex justify-center mb-4 gap-4 items-center">
-                <button id="recordBtn" class="bg-red-600 hover:bg-red-700 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95">
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                </button>
+                <div class="relative">
+                    <!-- Volume Indicator Ring -->
+                    <div id="volMeter" class="absolute inset-0 rounded-full border-4 border-transparent transition-all duration-75"></div>
+                    
+                    <button id="recordBtn" class="relative z-10 bg-red-600 hover:bg-red-700 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-95">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                    </button>
+                </div>
             </div>
             <p id="status" class="text-center text-xs text-gray-500 font-bold mb-4">READY</p>
             
@@ -106,6 +111,7 @@
         const status = document.getElementById('status');
         const preview = document.getElementById('livePreview');
         const content = document.getElementById('content');
+        const volMeter = document.getElementById('volMeter');
 
         // Socket Events
         socket.on('transcript-update', (data) => {
@@ -117,6 +123,7 @@
             status.innerText = "DONE";
             status.className = "text-center text-xs text-green-600 font-bold mb-4";
             btn.classList.remove('animate-pulse', 'bg-red-500', 'ring-4');
+            volMeter.style.borderColor = 'transparent'; // Reset volume
             if(data.success) content.innerHTML = data.html;
             else alert("Error: " + data.error);
         });
@@ -126,44 +133,63 @@
             if(isRecording) return;
             transcriptBuffer = "";
             try {
-                // 1. Get User Media (Native Sample Rate)
+                // 1. Get User Media
                 globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 
-                // 2. Create Audio Context (Let browser decide rate initially)
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const source = audioContext.createMediaStreamSource(globalStream);
+                // 2. Audio Context (Force 16k if possible)
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioContext = new AudioContext({ sampleRate: 16000 });
                 
-                // 3. Setup Processor
+                // CRITICAL FIX: Resume Audio Context if suspended (Common Browser Issue)
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                input = audioContext.createMediaStreamSource(globalStream);
                 processor = audioContext.createScriptProcessor(4096, 1, 1);
                 
-                source.connect(processor);
+                input.connect(processor);
                 processor.connect(audioContext.destination);
 
                 processor.onaudioprocess = (e) => {
                     if(!isRecording) return;
                     const inputData = e.inputBuffer.getChannelData(0);
                     
-                    // 4. Downsample Logic (Native -> 16000)
+                    // Visual Volume Feedback
+                    updateVolumeMeter(inputData);
+
+                    // Downsample & Convert
                     const downsampledData = downsampleBuffer(inputData, audioContext.sampleRate, 16000);
-                    
-                    // 5. Convert to Int16 (Deepgram expects Linear16)
                     const int16Data = convertFloat32ToInt16(downsampledData);
                     
-                    // 6. Send
                     socket.emit('audio-stream', int16Data.buffer);
                 };
 
                 isRecording = true;
-                btn.classList.add('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
+                btn.classList.add('bg-red-500', 'animate-pulse');
                 status.innerText = "LISTENING LIVE...";
                 status.className = "text-center text-xs text-red-600 font-bold mb-4";
             } catch(e) { alert("Mic Error: " + e.message); }
         }
 
+        function updateVolumeMeter(data) {
+            let sum = 0;
+            for(let i=0; i<data.length; i+=100) sum += Math.abs(data[i]);
+            const avg = sum / (data.length/100);
+            const scale = Math.min(1, avg * 5); // Amplify for visibility
+            if(scale > 0.01) {
+                volMeter.style.borderColor = `rgba(220, 38, 38, ${scale})`;
+                volMeter.style.transform = `scale(${1 + scale/3})`;
+            } else {
+                volMeter.style.borderColor = 'transparent';
+                volMeter.style.transform = 'scale(1)';
+            }
+        }
+
         // Helper: Downsample
         function downsampleBuffer(buffer, sampleRate, outSampleRate) {
             if (outSampleRate === sampleRate) return buffer;
-            if (outSampleRate > sampleRate) return buffer; // Should not happen
+            if (outSampleRate > sampleRate) return buffer; 
             const sampleRateRatio = sampleRate / outSampleRate;
             const newLength = Math.round(buffer.length / sampleRateRatio);
             const result = new Float32Array(newLength);
@@ -200,9 +226,11 @@
             // Cleanup
             if(globalStream) globalStream.getTracks().forEach(t => t.stop());
             if(processor) processor.disconnect();
+            if(input) input.disconnect();
             if(audioContext) audioContext.close();
 
-            btn.classList.remove('bg-red-500', 'animate-pulse', 'ring-4', 'ring-red-200');
+            btn.classList.remove('bg-red-500', 'animate-pulse');
+            volMeter.style.borderColor = 'transparent'; // Reset ring
             status.innerText = "FORMATTING...";
             status.className = "text-center text-xs text-blue-600 font-bold mb-4";
 
