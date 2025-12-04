@@ -1,0 +1,5 @@
+# Ignore OS files
+.env
+
+# Ignore node dependencies
+node_modules/
