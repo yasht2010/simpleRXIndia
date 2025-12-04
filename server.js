@@ -88,7 +88,7 @@ io.on('connection', (socket) => {
 
         try {
             const macros = await db.getMacros();
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
             
             // Use the Prompt Module
             const prompt = generateScribePrompt(fullTranscript, context, macros);
