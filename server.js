@@ -66,7 +66,10 @@ io.on('connection', (socket) => {
                 smart_format: true,
                 interim_results: true,
                 keywords: keywords,
-                // No encoding/sample_rate needed for WebM streams
+                encoding: "linear16",
+                sample_rate: 16000,
+                channels: 1,
+                utterance_end_ms: 1200
             });
 
             // Events
@@ -84,6 +87,7 @@ io.on('connection', (socket) => {
             dgConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
                 const transcript = data.channel?.alternatives?.[0]?.transcript;
                 if (transcript) {
+                    console.log(`🗣️ DG transcript (${socket.id}):`, transcript);
                     socket.emit('transcript-update', { 
                         text: transcript, 
                         isFinal: data.is_final 
@@ -105,15 +109,31 @@ io.on('connection', (socket) => {
     };
 
     // B. Handle Audio Stream
+    let chunkCount = 0;
     socket.on('audio-stream', async (data) => {
         // Initialize on first chunk
         if (!dgConnection) {
             await setupDeepgram();
         }
 
-        // Send data if ready
+        // Ensure Deepgram is ready and send as a Buffer
         if (dgConnection && dgConnection.getReadyState() === 1) {
-            dgConnection.send(data);
+            let payload = data;
+            // Support object payload { type, data }
+            if (data && data.data) payload = data.data;
+
+            let audioBuffer = null;
+            if (Buffer.isBuffer(payload)) audioBuffer = payload;
+            else if (payload instanceof ArrayBuffer) audioBuffer = Buffer.from(payload);
+            else if (ArrayBuffer.isView(payload)) audioBuffer = Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+            
+            if (audioBuffer && audioBuffer.length) {
+                if (chunkCount < 3) {
+                    console.log(`🎙️ Audio chunk ${chunkCount + 1}: ${audioBuffer.length} bytes`);
+                }
+                chunkCount += 1;
+                dgConnection.send(audioBuffer);
+            }
         }
     });
 
