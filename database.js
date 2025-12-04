@@ -1,10 +1,12 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Handle Render.com Persistent Disk Path vs Local
-const dbPath = process.env.RENDER 
-    ? '/var/data/smartrx.db' 
-    : './smartrx.db';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Use Absolute Path for persistence on Cloud servers
+const dbPath = path.join(__dirname, 'smartrx.db');
 
 const db = new sqlite3.Database(dbPath);
 
@@ -16,7 +18,7 @@ db.serialize(() => {
         expansion TEXT
     )`);
 
-    // 2. Settings Table (Doctor Profile & Keywords)
+    // 2. Settings Table
     db.run(`CREATE TABLE IF NOT EXISTS settings (
         id INTEGER PRIMARY KEY,
         doctor_name TEXT,
@@ -26,13 +28,22 @@ db.serialize(() => {
         custom_keywords TEXT
     )`);
 
-    // Seed Default Settings if empty
+    // Seed Default Settings
     db.get("SELECT count(*) as count FROM settings", (err, row) => {
-        if (row.count === 0) {
+        if (row && row.count === 0) {
             db.run(`INSERT INTO settings (id, doctor_name, qualification, reg_no, clinic_details, custom_keywords) 
                 VALUES (1, 'Dr. Rajesh Kumar', 'MBBS, MD', 'NMC-12345', 'LifeCare Clinic, MG Road', 'Urimax, Drotin, Niftas, Cital')`);
         }
     });
+    
+    // 3. Rx History Table (For Links)
+    db.run(`CREATE TABLE IF NOT EXISTS prescriptions (
+        id TEXT PRIMARY KEY,
+        doctor_name TEXT,
+        patient_name TEXT,
+        content_html TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
 });
 
 // --- HELPER FUNCTIONS ---
@@ -41,7 +52,7 @@ export const getSettings = () => {
     return new Promise((resolve, reject) => {
         db.get("SELECT * FROM settings WHERE id = 1", (err, row) => {
             if (err) reject(err);
-            else resolve(row);
+            else resolve(row || {});
         });
     });
 };
@@ -63,7 +74,7 @@ export const getMacros = () => {
     return new Promise((resolve, reject) => {
         db.all("SELECT trigger_phrase, expansion FROM macros", (err, rows) => {
             if (err) reject(err);
-            else resolve(rows);
+            else resolve(rows || []);
         });
     });
 };
@@ -74,6 +85,25 @@ export const saveMacro = (trigger, expansion) => {
             [trigger, expansion], (err) => {
             if (err) reject(err);
             else resolve(true);
+        });
+    });
+};
+
+export const savePrescription = (id, docName, patName, html) => {
+    return new Promise((resolve, reject) => {
+        db.run("INSERT INTO prescriptions (id, doctor_name, patient_name, content_html) VALUES (?, ?, ?, ?)", 
+            [id, docName, patName, html], (err) => {
+            if (err) reject(err);
+            else resolve(id);
+        });
+    });
+};
+
+export const getPrescription = (id) => {
+    return new Promise((resolve, reject) => {
+        db.get("SELECT * FROM prescriptions WHERE id = ?", [id], (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
         });
     });
 };
