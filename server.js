@@ -9,6 +9,10 @@ import { fileURLToPath } from 'url';
 import basicAuth from 'express-basic-auth'; 
 import * as db from './database.js'; 
 
+// IMPORT PROMPTS MODULE
+import { generateScribePrompt } from './prompts.js';
+
+
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -57,25 +61,9 @@ app.post('/process-audio', upload.single('audio'), async (req, res) => {
         // 2. Format / Merge (Gemini)
         const macros = await db.getMacros();
         const currentContext = req.body.context || ""; // The existing HTML note
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
         
-        const prompt = `
-        Act as an expert medical scribe.
-        
-        **Current Note (HTML):** "${currentContext}"
-        **New Dictation:** "${transcript}"
-        **Macros:** ${JSON.stringify(macros)}
-        
-        **TASK:**
-        Update the "Current Note" based on the "New Dictation".
-        
-        **LOGIC:**
-        1. **Merge:** If the note exists, intelligently ADD or EDIT details. (e.g., if dictation says "Change Dolo to 5 days", update the existing entry. If it says "Add Cough Syrup", append it).
-        2. **Create:** If note is empty, create standard headers: <h3>Diagnosis</h3>, <h3>Rx</h3>, <h3>Advice</h3>.
-        3. **Macros:** If a macro trigger is heard, expand it.
-        
-        **OUTPUT:** Return ONLY the updated HTML. No markdown.
-        `;
+        const prompt = generateScribePrompt(transcript, currentContext, macros);
 
         const aiResult = await model.generateContent(prompt);
         const html = aiResult.response.text();
