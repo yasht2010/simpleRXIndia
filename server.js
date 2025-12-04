@@ -1,87 +1,131 @@
 import express from 'express';
-import multer from 'multer';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { createClient } from '@deepgram/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import fs from 'fs';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { transcribeAudio } from './transcriber.js';
-import * as db from './database.js';
+import basicAuth from 'express-basic-auth'; 
+import { v4 as uuidv4 } from 'uuid';
+
+// Import Custom Modules
+import * as db from './database.js'; 
 import { generateScribePrompt } from './prompts.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const app = express();
-const upload = multer({ dest: 'uploads/' });
 
-if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer);
+
+// --- 🔒 PASSWORD PROTECTION ---
+const adminUser = process.env.ADMIN_USER;
+const adminPass = process.env.ADMIN_PASS;
+
+if (adminUser && adminPass) {
+    const users = {};
+    users[adminUser] = adminPass;
+    app.use(basicAuth({ users, challenge: true, realm: 'SmartRx Login' }));
+}
 
 app.use(express.static('public'));
 app.use(express.json());
 
+const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-const ACTIVE_PROVIDER = process.env.TRANSCRIPTION_PROVIDER || 'deepgram';
 
-// --- MAIN PROCESS ---
-app.post('/process-audio', upload.single('audio'), async (req, res) => {
-    try {
-        if (!req.file) throw new Error("No audio.");
-        
-        // 1. Get Context (The text already on screen)
-        const currentContext = req.body.context || "";
+// --- SOCKET CONNECTION LOGIC ---
+io.on('connection', (socket) => {
+    console.log('🔌 Client Connected:', socket.id);
+    let dgLive = null;
 
-        // 2. Get Settings (for Keywords)
+    // 1. Setup Deepgram Live
+    const setupDeepgram = async () => {
         const settings = await db.getSettings();
+        // Convert "Urimax, Drotin" string to ["Urimax:2", "Drotin:2"]
+        const keywords = settings.custom_keywords 
+            ? settings.custom_keywords.split(',').map(k => k.trim() + ":2") 
+            : [];
+
+        dgLive = deepgram.listen.live({
+            model: "nova-2-medical",
+            language: "en-IN",
+            smart_format: true,
+            interim_results: true,
+            keywords: keywords,
+            encoding: "linear16", // Raw PCM audio
+            sample_rate: 16000    // Downsampled rate
+        });
+
+        dgLive.on("Transcript", (data) => {
+            const transcript = data.channel.alternatives[0].transcript;
+            if (transcript) {
+                socket.emit('transcript-update', { 
+                    text: transcript, 
+                    isFinal: data.is_final 
+                });
+            }
+        });
+
+        dgLive.on("error", (err) => console.error("DG Error:", err));
+    };
+
+    // 2. Handle Streaming Audio
+    socket.on('audio-stream', async (data) => {
+        if (!dgLive) await setupDeepgram();
+        if (dgLive && dgLive.getReadyState() === 1) {
+            dgLive.send(data);
+        }
+    });
+
+    // 3. Finalize & Format (Gemini)
+    socket.on('finalize-prescription', async ({ fullTranscript, context }) => {
+        if (dgLive) { dgLive.finish(); dgLive = null; }
         
-        // 3. Transcribe
-        const transcript = await transcribeAudio(req.file.path, ACTIVE_PROVIDER, settings.custom_keywords);
-        console.log("Transcript:", transcript);
+        console.log("📝 Formatting:", fullTranscript);
 
-        // 4. Get Macros
-        const macros = await db.getMacros();
-        const macroContext = JSON.stringify(macros);
+        try {
+            const macros = await db.getMacros();
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+            
+            // Use the Prompt Module
+            const prompt = generateScribePrompt(fullTranscript, context, macros);
+            
+            const result = await model.generateContent(prompt);
+            socket.emit('prescription-result', { success: true, html: result.response.text() });
+        } catch (e) {
+            console.error("Gemini Error:", e);
+            socket.emit('prescription-result', { success: false, error: e.message });
+        }
+    });
 
-        // 5. Gemini Processing (Context-Aware)
-        // Switch to gemini-1.5-pro for better "Merging" logic
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
-        
-        // Use the imported prompt generator
-        const prompt = generateScribePrompt(transcript, currentContext, macroContext);
-
-        const aiResult = await model.generateContent(prompt);
-        const rawOutput = aiResult.response.text();
-        
-        fs.unlinkSync(req.file.path);
-        res.json({ success: true, raw: rawOutput });
-
-    } catch (err) {
-        console.error("Error:", err);
-        res.status(500).json({ success: false, error: err.message, retryId: req.file?.filename });
-    }
+    socket.on('disconnect', () => {
+        if (dgLive) dgLive.finish();
+    });
 });
 
-// --- SETTINGS APIs ---
+// --- REST APIs (Settings/DB) ---
 app.get('/settings', async (req, res) => res.json(await db.getSettings()));
 app.post('/settings', async (req, res) => { await db.saveSettings(req.body); res.json({ success: true }); });
 
-// --- MACRO APIs ---
 app.get('/macros', async (req, res) => res.json(await db.getMacros()));
 app.post('/macros', async (req, res) => { await db.saveMacro(req.body.trigger, req.body.expansion); res.json({ success: true }); });
 
-// --- Rx APIs ---
-app.post('/save-rx', async (req, res) => {
-    try {
-        const id = await db.savePrescription(req.body.doctorName, req.body.patientName, req.body.htmlContent);
-        res.json({ success: true, link: `${req.protocol}://${req.get('host')}/rx/${id}`, id });
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
+// --- VIEW RX PAGE ---
 app.get('/rx/:id', async (req, res) => {
     try {
         const rx = await db.getPrescription(req.params.id);
         if (!rx) return res.send("Prescription not found.");
-        res.send(`<html><body><h1>${rx.doctor_name}</h1><div>${rx.content_html}</div></body></html>`); // Simplified for brevity
-    } catch (err) { res.send("Error"); }
+        res.send(`
+            <html><head><title>Rx</title></head><body style="font-family:sans-serif;padding:20px;">
+            <div style="border-bottom:2px solid #333;margin-bottom:20px;"><h1>Dr. ${rx.doctor_name}</h1></div>
+            ${rx.content_html}
+            </body></html>
+        `);
+    } catch (e) { res.send("Error"); }
 });
 
 const PORT = 3000;
-app.listen(PORT, () => console.log(`\n🚀 Server running at http://localhost:${PORT}\n`));
+httpServer.listen(PORT, () => console.log(`\n🚀 Server running on port ${PORT}\n`));
