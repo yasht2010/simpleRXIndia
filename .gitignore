@@ -4,3 +4,4 @@ smartrx.db
 
 # Ignore node dependencies
 node_modules/
+uploads/
