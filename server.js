@@ -73,8 +73,17 @@ io.on('connection', (socket) => {
     };
 
     // 2. Handle Streaming Audio
+
+    let isDeepgramConnecting = false; // Lock flag
+
     socket.on('audio-stream', async (data) => {
-        if (!dgLive) await setupDeepgram();
+        // Prevent multiple simultaneous connection attempts
+        if (!dgLive && !isDeepgramConnecting) {
+            isDeepgramConnecting = true;
+            await setupDeepgram();
+            isDeepgramConnecting = false;
+        }
+        
         if (dgLive && dgLive.getReadyState() === 1) {
             dgLive.send(data);
         }
