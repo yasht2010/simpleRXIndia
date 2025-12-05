@@ -90,8 +90,25 @@
                     <div class="flex justify-center">
                         <div class="text-[#1769AA] font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
                     </div>
-                    <div class="flex justify-end gap-2">
-                    <button onclick="window.location.reload()" class="px-3 py-1 text-gray-500 text-xs">Clear</button>
+                    <div class="flex justify-end items-center gap-2">
+                        <div class="relative">
+                            <button id="modeButton" onclick="toggleModeMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-200 hover:border-blue-200">
+                                <span id="modeLabel" class="flex items-center gap-1 whitespace-nowrap">⚡ Live (Faster)</span>
+                                <span class="text-slate-500 text-xs">⌄</span>
+                            </button>
+                            <div id="modeMenu" class="hidden absolute right-0 bottom-full mb-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50">
+                                <div class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-50" onclick="selectMode('live')">
+                                    <span class="flex items-center gap-2 whitespace-nowrap">⚡ Live (Faster)</span>
+                                    <span id="checkLive" class="text-blue-600 text-xs">✓</span>
+                                </div>
+                                <div class="border-t border-slate-200"></div>
+                                <div class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-50" onclick="selectMode('offline')">
+                                    <span class="flex items-center gap-2 whitespace-nowrap">🔍 Offline (High Accuracy)</span>
+                                    <span id="checkOffline" class="text-blue-600 text-xs hidden">✓</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="window.location.reload()" class="px-3 py-1 text-gray-500 text-xs">Clear</button>
                         <button onclick="handlePrint()" class="bg-gray-900 text-white px-4 py-2 rounded text-sm font-bold">Print</button>
                     </div>
                 </div>
@@ -163,6 +180,8 @@
         let elapsedSeconds = 0;
         const MAX_SECONDS = 300; // 5 minutes
         const GRACE_SECONDS = 15; // prevent accidental stops
+        let transcriptionMode = 'live'; // 'live' or 'offline'
+        let modeLocked = false;
 
         // --- AUTH ---
         window.onload = initApp;
@@ -239,6 +258,41 @@
             const statusEl = document.getElementById('status');
             statusEl.innerText = text;
             statusEl.className = `text-center text-xs font-bold mb-4 min-h-[1.5rem] whitespace-pre-line px-4 ${colorClass || 'text-gray-500'}`;
+        }
+
+        function setMode(mode) {
+            transcriptionMode = mode;
+            const label = document.getElementById('modeLabel');
+            const checkLive = document.getElementById('checkLive');
+            const checkOffline = document.getElementById('checkOffline');
+            if (mode === 'live') {
+                updateStatus("READY (Live)", "text-gray-500");
+                label.innerText = "⚡ Live (Faster)";
+                checkLive.classList.remove('hidden');
+                checkOffline.classList.add('hidden');
+            } else {
+                updateStatus("READY (Offline high accuracy)", "text-gray-500");
+                label.innerText = "🔍 Offline (High Accuracy)";
+                checkOffline.classList.remove('hidden');
+                checkLive.classList.add('hidden');
+            }
+            closeModeMenu();
+        }
+
+        function toggleModeMenu() {
+            if (modeLocked) return;
+            const menu = document.getElementById('modeMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        function closeModeMenu() {
+            const menu = document.getElementById('modeMenu');
+            if (menu) menu.classList.add('hidden');
+        }
+
+        function selectMode(mode) {
+            if (modeLocked) return;
+            setMode(mode);
         }
 
         function setRecordState(state) {
@@ -332,6 +386,7 @@
                 updateStatus("ERROR", "text-red-500");
             }
             setRecordState('idle');
+            modeLocked = false;
         }
 
         // --- RECORDING (Native Streaming) ---
@@ -345,36 +400,38 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-                // Live stream via AudioContext (16k PCM)
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-                sourceNode = audioCtx.createMediaStreamSource(stream);
-                analyserNode = audioCtx.createAnalyser();
-                analyserNode.fftSize = 512;
-                processorNode = audioCtx.createScriptProcessor(4096, 1, 1);
-                sourceNode.connect(analyserNode);
-                analyserNode.connect(processorNode);
-                processorNode.connect(audioCtx.destination);
+                if (transcriptionMode === 'live') {
+                    // Live stream via AudioContext (16k PCM)
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                    sourceNode = audioCtx.createMediaStreamSource(stream);
+                    analyserNode = audioCtx.createAnalyser();
+                    analyserNode.fftSize = 512;
+                    processorNode = audioCtx.createScriptProcessor(4096, 1, 1);
+                    sourceNode.connect(analyserNode);
+                    analyserNode.connect(processorNode);
+                    processorNode.connect(audioCtx.destination);
 
-                processorNode.onaudioprocess = (e) => {
-                    if (!isRecording) return;
-                    const input = e.inputBuffer.getChannelData(0);
-                    const pcm16 = new Int16Array(input.length);
-                    for (let i = 0; i < input.length; i++) {
-                        let s = Math.max(-1, Math.min(1, input[i]));
-                        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                    }
-                    pcmQueue.push(pcm16);
-                    const totalSamples = pcmQueue.reduce((sum, chunk) => sum + chunk.length, 0);
-                    if (totalSamples >= 12000) { // ~0.75s
-                        const merged = new Int16Array(totalSamples);
-                        let offset = 0;
-                        pcmQueue.forEach(chunk => { merged.set(chunk, offset); offset += chunk.length; });
-                        pcmQueue = [];
-                        socket.emit('audio-stream', { type: 'pcm', data: merged.buffer });
-                    }
-                };
+                    processorNode.onaudioprocess = (e) => {
+                        if (!isRecording) return;
+                        const input = e.inputBuffer.getChannelData(0);
+                        const pcm16 = new Int16Array(input.length);
+                        for (let i = 0; i < input.length; i++) {
+                            let s = Math.max(-1, Math.min(1, input[i]));
+                            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                        }
+                        pcmQueue.push(pcm16);
+                        const totalSamples = pcmQueue.reduce((sum, chunk) => sum + chunk.length, 0);
+                        if (totalSamples >= 12000) { // ~0.75s
+                            const merged = new Int16Array(totalSamples);
+                            let offset = 0;
+                            pcmQueue.forEach(chunk => { merged.set(chunk, offset); offset += chunk.length; });
+                            pcmQueue = [];
+                            socket.emit('audio-stream', { type: 'pcm', data: merged.buffer });
+                        }
+                    };
+                }
 
-                // Backup recording for upload if live fails
+                // Always capture backup/primary recording for final upload
                 mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
                 recordedMimeType = mediaRecorder.mimeType; 
                 mediaRecorder.ondataavailable = async (e) => {
@@ -384,13 +441,16 @@
 
                 isRecording = true;
                 setRecordState('recording');
-                updateStatus("LISTENING...", "text-red-500");
+                updateStatus(transcriptionMode === 'live' ? "LISTENING..." : "RECORDING (offline high accuracy)", "text-red-500");
+                modeLocked = true;
                 startTimer();
-                startWaveform();
+                if (transcriptionMode === 'live') startWaveform();
+                else document.getElementById('waveform').classList.add('opacity-0');
 
             } catch (e) { 
                 updateStatus("Mic permission denied", "text-red-500");
                 setRecordState('idle');
+                modeLocked = false;
             }
         }
 
@@ -411,12 +471,14 @@
             clearInterval(timerInterval);
             setRecordState('processing');
             document.getElementById('countdownBadge').classList.add('hidden');
-            flushPcmQueue();
-            if (processorNode) { processorNode.disconnect(); processorNode.onaudioprocess = null; processorNode = null; }
-            if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
-            if (audioCtx) { audioCtx.close(); audioCtx = null; }
-            pcmQueue = [];
-            stopWaveform();
+            if (transcriptionMode === 'live') {
+                flushPcmQueue();
+                if (processorNode) { processorNode.disconnect(); processorNode.onaudioprocess = null; processorNode = null; }
+                if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
+                if (audioCtx) { audioCtx.close(); audioCtx = null; }
+                pcmQueue = [];
+                stopWaveform();
+            }
 
             if(mediaRecorder) mediaRecorder.stop();
             if(mediaRecorder && mediaRecorder.stream) mediaRecorder.stream.getTracks().forEach(t => t.stop());
@@ -425,18 +487,24 @@
             if (!autoStop && duration < 2000) { 
                 updateStatus("Cancelled (<2s)", "text-gray-500");
                 setRecordState('idle');
+                modeLocked = false;
                 return;
             }
 
-            updateStatus("FORMATTING...", "text-blue-600");
-            const cleanContext = document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML;
-            
-            const pendingPreview = document.getElementById('livePreview').innerText;
-            const fullText = (transcriptBuffer + " " + pendingPreview).trim();
+            if (transcriptionMode === 'live') {
+                updateStatus("FORMATTING...", "text-blue-600");
+                const cleanContext = document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML;
+                
+                const pendingPreview = document.getElementById('livePreview').innerText;
+                const fullText = (transcriptBuffer + " " + pendingPreview).trim();
 
-            setTimeout(() => {
-                socket.emit('finalize-prescription', { fullTranscript: fullText, context: cleanContext });
-            }, 2500);
+                setTimeout(() => {
+                    socket.emit('finalize-prescription', { fullTranscript: fullText, context: cleanContext });
+                }, 2500);
+            } else {
+                updateStatus("Processing (offline high accuracy)...", "text-blue-600");
+                uploadBackup();
+            }
         }
 
         // --- BACKUP UPLOAD ---
@@ -492,6 +560,14 @@
         }
 
         // Events
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('modeMenu');
+            const btn = document.getElementById('modeButton');
+            if (!menu || !btn) return;
+            if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+                closeModeMenu();
+            }
+        });
 
         // Macros Logic
         function openSettings() { document.getElementById('settingsModal').classList.remove('hidden'); }
