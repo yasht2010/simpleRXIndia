@@ -4,6 +4,8 @@ import { Server } from 'socket.io';
 import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import session from 'express-session';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import SQLiteStore from 'connect-sqlite3';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
@@ -12,7 +14,7 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import fs from 'fs';
 import * as db from './database.js';
-import { generateScribePrompt } from './prompts.js';
+import { generateScribePrompt, generateReviewPrompt, generateFormatPrompt } from './prompts.js';
 import crypto from 'crypto';
 
 dotenv.config();
@@ -25,22 +27,37 @@ const upload = multer({ dest: 'uploads/' });
 
 if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
 
+// --- CONFIG CONSTANTS ---
+const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'adminpass';
+const REGISTRATION_OTP = process.env.REGISTRATION_OTP || '2345';
+const DG_MODEL = process.env.TRANSCRIPTION_MODEL || 'nova-2-medical';
+const DG_LANGUAGE = process.env.TRANSCRIPTION_LANGUAGE || 'en-IN';
+const SCRIBE_MODEL = process.env.SCRIBE_MODEL || 'gemini-2.5-pro';
+const REVIEW_MODEL = process.env.REVIEW_MODEL || 'gemini-2.5-pro';
+const FORMAT_MODEL = process.env.FORMAT_MODEL || 'gemini-2.5-pro';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'change_me_session_secret';
+
 // --- SESSION CONFIG ---
 const SQLStore = SQLiteStore(session);
 const sessionMiddleware = session({
     store: new SQLStore({ dir: __dirname, db: 'smartrx.db' }),
-    secret: 'smartrx_secret_key',
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
+    cookie: { 
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+    }
 });
 
 app.use(sessionMiddleware);
 app.use(express.json());
+app.use(helmet({ contentSecurityPolicy: false }));
 
-// --- ADMIN PASSCODE ---
-const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'adminpass';
-const REGISTRATION_OTP = process.env.REGISTRATION_OTP || '2345';
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+const aiLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 30 });
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
@@ -67,6 +84,8 @@ app.use(express.static('public'));
 const wrap = (middleware) => (socket, next) => middleware(socket.request, socket.request.res || {}, next);
 io.use(wrap(sessionMiddleware));
 
+const cleanAI = (text = "") => text.replace(/```(?:html)?/gi, "").replace(/```/g, "").trim();
+
 io.on('connection', (socket) => {
     const userId = socket.request.session.userId;
     if (!userId) { socket.disconnect(); return; }
@@ -85,8 +104,8 @@ io.on('connection', (socket) => {
                 : [];
 
             dgConnection = deepgram.listen.live({
-                model: "nova-2-medical",
-                language: "en-IN",
+                model: DG_MODEL,
+                language: DG_LANGUAGE,
                 smart_format: true,
                 interim_results: true,
                 keywords: keywords,
@@ -188,14 +207,14 @@ io.on('connection', (socket) => {
         // Gemini Processing
         try {
             const macros = await db.getMacros(userId);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+            const model = genAI.getGenerativeModel({ model: SCRIBE_MODEL });
             const prompt = generateScribePrompt(fullTranscript, context, macros);
             const result = await model.generateContent(prompt);
             const newCredits = await db.getCredits(userId);
             
             socket.emit('prescription-result', { 
                 success: true, 
-                html: result.response.text(), 
+                html: cleanAI(result.response.text()), 
                 credits: newCredits 
             });
         } catch (e) {
@@ -213,7 +232,7 @@ io.on('connection', (socket) => {
 // --- 2. REST APIs (Settings/Auth) ---
 // (These remain exactly the same as your previous working version)
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
     const user = await db.getUser(req.body.phone);
     if (user && bcrypt.compareSync(req.body.password, user.password)) {
         req.session.userId = user.id; res.json({ success: true });
@@ -227,13 +246,13 @@ app.post('/api/logout', (req, res) => {
         res.json({ success: true });
     });
 });
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
     try { await db.createUser(req.body.phone, req.body.password); res.json({ success: true }); } 
     catch (e) { res.json({ success: false, message: "Exists" }); }
 });
 
 // Registration with OTP (static for now)
-app.post('/api/register/send-otp', async (req, res) => {
+app.post('/api/register/send-otp', authLimiter, async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: "Phone required" });
     const existing = await db.getUser(phone);
@@ -242,7 +261,7 @@ app.post('/api/register/send-otp', async (req, res) => {
     res.json({ success: true });
 });
 
-app.post('/api/register/verify-otp', (req, res) => {
+app.post('/api/register/verify-otp', authLimiter, (req, res) => {
     const { phone, otp } = req.body;
     if (!phone || !otp) return res.status(400).json({ error: "Missing fields" });
     if (phone !== req.session.pendingPhone) return res.status(400).json({ error: "Phone mismatch" });
@@ -251,7 +270,7 @@ app.post('/api/register/verify-otp', (req, res) => {
     res.json({ success: true });
 });
 
-app.post('/api/register/complete', async (req, res) => {
+app.post('/api/register/complete', authLimiter, async (req, res) => {
     const { phone, password, doctor_name, qualification, reg_no } = req.body;
     if (!req.session.verifiedPhone || req.session.verifiedPhone !== phone) return res.status(400).json({ error: "OTP not verified" });
     try {
@@ -278,6 +297,35 @@ app.post('/api/macros/delete', async (req, res) => {
     if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
     await db.deleteMacro(req.session.userId, req.body.trigger);
     res.json({ success: true }); 
+});
+
+// --- REVIEW ENDPOINT ---
+app.post('/api/review', aiLimiter, async (req, res) => {
+    try {
+        const { html } = req.body;
+        if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+        if (!html) return res.status(400).json({ error: "Missing html" });
+        const model = genAI.getGenerativeModel({ model: REVIEW_MODEL });
+        const prompt = generateReviewPrompt(html);
+        const result = await model.generateContent(prompt);
+        res.json({ success: true, reviewed: cleanAI(result.response.text()) });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/format', aiLimiter, async (req, res) => {
+    try {
+        const { html } = req.body;
+        if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+        if (!html) return res.status(400).json({ error: "Missing html" });
+        const model = genAI.getGenerativeModel({ model: FORMAT_MODEL });
+        const prompt = generateFormatPrompt(html);
+        const result = await model.generateContent(prompt);
+        res.json({ success: true, formatted: cleanAI(result.response.text()) });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 app.get('/settings', async (req, res) => { if (!req.session.userId) return res.status(401).json({}); res.json(await db.getSettings(req.session.userId) || {}); });
 app.post('/settings', async (req, res) => { if (!req.session.userId) return res.status(401).json({}); await db.saveSettings(req.session.userId, req.body); res.json({ success: true }); });
@@ -339,19 +387,19 @@ app.post('/api/process-backup', upload.single('audio'), async (req, res) => {
 
         const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
             fs.readFileSync(req.file.path),
-            { model: 'nova-2-medical', smart_format: true, language: 'en-IN', mimetype: 'audio/webm' }
+            { model: DG_MODEL, smart_format: true, language: DG_LANGUAGE, mimetype: 'audio/webm' }
         );
         if (error) throw error;
         
         const transcript = result.results.channels[0].alternatives[0].transcript;
         const macros = await db.getMacros(req.session.userId);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+        const model = genAI.getGenerativeModel({ model: SCRIBE_MODEL });
         const prompt = generateScribePrompt(transcript, req.body.context || "", macros);
         const aiRes = await model.generateContent(prompt);
         
         fs.unlinkSync(req.file.path);
         const newCredits = await db.getCredits(req.session.userId);
-        res.json({ success: true, html: aiRes.response.text(), credits: newCredits });
+        res.json({ success: true, html: cleanAI(aiRes.response.text()), credits: newCredits });
 
     } catch (e) {
         res.status(500).json({ error: e.message });

@@ -49,8 +49,13 @@
 
     <!-- MAIN APP -->
     <div id="appScreen" class="hidden min-h-screen flex flex-col items-center p-4">
+        <div class="w-full max-w-3xl mb-1 no-print">
+            <div class="text-blue-900 font-extrabold text-3xl">Clinova Rx</div>
+        </div>
         <div class="w-full max-w-3xl flex justify-between items-center mb-4 no-print">
-            <div class="text-blue-900 font-bold">Clinova Rx</div>
+            <div class="flex items-center gap-4">
+                <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-[#1769AA] text-sm font-semibold underline">💊 Voice Macros</button>
+            </div>
             <div class="flex gap-4 text-sm font-medium">
                 <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">Prescriptions: <span id="creditDisplay">0</span></span>
                 <button onclick="logout()" class="text-red-500">Logout</button>
@@ -83,14 +88,40 @@
                     <p id="recordLabel" class="text-sm font-semibold text-[#4A5568]">Tap to start prescription</p>
                     <p id="status" class="text-center text-xs text-gray-500 font-bold min-h-[1.5rem] whitespace-pre-line px-4">READY</p>
                 </div>
-                <div class="w-full flex flex-col gap-3 md:grid md:grid-cols-3 md:items-center mt-4">
-                    <div class="flex justify-start">
-                        <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-[#1769AA] text-sm font-semibold underline">💊 Voice Macros</button>
-                    </div>
-                    <div class="flex justify-center">
-                        <div class="text-[#1769AA] font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
-                    </div>
-                    <div class="flex flex-wrap justify-end items-center gap-2">
+                <div class="w-full grid grid-cols-1 md:grid-cols-3 items-center mt-4 gap-3">
+                    <div class="flex justify-start md:col-span-1 gap-2 items-center">
+                        <div class="relative">
+                            <button id="fontButton" onclick="toggleFontMenu()" class="bg-white border border-slate-200 rounded-md px-2 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-200 hover:border-blue-200">
+                                <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.89 3.31.877 2.42 2.42a1.724 1.724 0 001.065 2.572c1.757.426 1.757 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.89 1.543-.877 3.31-2.42 2.42a1.724 1.724 0 00-2.572 1.065c-.427 1.757-2.925 1.757-3.351 0a1.724 1.724 0 00-2.572-1.066c-1.543.89-3.31-.876-2.42-2.42a1.724 1.724 0 00-1.065-2.572c-1.757-.427-1.757-2.925 0-3.351a1.724 1.724 0 001.066-2.572c-.89-1.543.877-3.31 2.42-2.42.996.574 2.273.096 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.75a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5z"/></svg>
+                            </button>
+                            <div id="fontMenu" class="hidden absolute left-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50 p-3 space-y-3">
+                                <div>
+                                    <label class="block text-[11px] text-slate-600 mb-1">Font family</label>
+                                    <select id="fontFamilySelect" class="w-full border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                                        <option value="'Inter', sans-serif">Sans (Inter)</option>
+                                        <option value="Georgia, serif">Serif (Georgia)</option>
+                                        <option value="'Source Sans Pro', sans-serif">Sans (Source Sans)</option>
+                                        <option value="'Roboto Mono', monospace">Mono (Roboto Mono)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-600 mb-1">Font size</label>
+                                    <select id="fontSizeSelect" class="w-full border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                                        <option value="14px" selected>14 px</option>
+                                        <option value="16px">16 px</option>
+                                        <option value="18px">18 px</option>
+                                        <option value="20px">20 px</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reviewToggle" type="checkbox" class="h-3.5 w-3.5" checked onchange="toggleReviewSetting()">
+                                    <label for="reviewToggle" class="text-[11px] text-slate-600">Enable AI review (auto)</label>
+                                </div>
+                                <div class="flex justify-end">
+                                    <button class="text-blue-700 text-xs font-semibold" onclick="applyFontSettings()">Apply</button>
+                                </div>
+                            </div>
+                        </div>
                         <div class="relative">
                             <button id="modeButton" onclick="toggleModeMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-200 hover:border-blue-200">
                                 <span id="modeLabel" class="flex items-center gap-1 whitespace-nowrap">⚡ Live (Faster)</span>
@@ -108,6 +139,11 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <div class="flex justify-center">
+                        <div class="text-[#1769AA] font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
+                    </div>
+                    <div class="flex justify-end items-center gap-2">
                         <button onclick="window.location.reload()" class="px-3 py-1 text-gray-500 text-xs">Clear</button>
                         <button onclick="handlePrint()" class="bg-gray-900 text-white px-4 py-2 rounded text-sm font-bold">Print</button>
                     </div>
@@ -182,6 +218,9 @@
         const GRACE_SECONDS = 15; // prevent accidental stops
         let transcriptionMode = 'live'; // 'live' or 'offline'
         let modeLocked = false;
+        let fontMenuOpen = false;
+        let reviewEnabled = true;
+        let pendingHtml = "";
 
         // --- AUTH ---
         window.onload = initApp;
@@ -197,15 +236,43 @@
                 document.getElementById('loginError').innerText = "Login failed. Check phone/password.";
             }
         }
-        async function toggleRegister() {
-            const phone = prompt("New Phone:"); const pass = prompt("New Password:");
-            if(phone && pass) { await fetch('/api/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone, password: pass }) }); alert("Registered. Please login."); }
+
+        async function autoReview() {
+            const html = pendingHtml || document.getElementById('content').innerHTML;
+            if (!html || html.trim() === "") {
+                updateStatus("No prescription to review", "text-amber-600");
+                setRecordState('idle');
+                modeLocked = false;
+                return;
+            }
+            updateStatus("AI review in progress…", "text-blue-600");
+            try {
+                const res = await fetch('/api/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    pendingHtml = data.reviewed;
+                    updateStatus("Formatting...", "text-blue-600");
+                    await autoFormat();
+                } else {
+                    updateStatus("Review failed", "text-red-500");
+                    setRecordState('idle');
+                    modeLocked = false;
+                }
+            } catch (e) {
+                updateStatus("Review failed", "text-red-500");
+                setRecordState('idle');
+                modeLocked = false;
+            } 
         }
         async function logout() { 
             await fetch('/api/logout', { method: 'POST' });
             window.location.href = '/';
         }
-        async function initApp() {
+       async function initApp() {
             try {
                 const res = await fetch('/api/me');
                 if (res.status === 401) throw new Error("Unauthorized");
@@ -216,6 +283,35 @@
                 document.getElementById('appScreen').classList.remove('hidden');
                 loadMacros();
             } catch (e) {}
+        }
+        async function autoFormat() {
+            const html = pendingHtml || document.getElementById('content').innerHTML;
+            if (!html || html.trim() === "") {
+                updateStatus("No prescription to format", "text-amber-600");
+                setRecordState('idle');
+                modeLocked = false;
+                return;
+            }
+            try {
+                const res = await fetch('/api/format', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('content').innerHTML = data.formatted;
+                    pendingHtml = "";
+                    updateStatus("DONE", "text-green-600");
+                } else {
+                    updateStatus("Formatting failed", "text-red-500");
+                }
+            } catch (e) {
+                updateStatus("Formatting failed", "text-red-500");
+            } finally {
+                setRecordState('idle');
+                modeLocked = false;
+            }
         }
         async function saveHeader() {
             const statusEl = document.getElementById('headerStatus');
@@ -231,16 +327,13 @@
 
         // --- SOCKET EVENTS ---
         socket.on('transcript-update', (data) => {
-            const statusEl = document.getElementById('status');
             if (data.isFinal) {
                 transcriptBuffer += " " + data.text;
                 document.getElementById('livePreview').innerText = "";
-                // Show last captured phrase in status
-                updateStatus("CAPTURED:\n" + data.text, "text-blue-600");
+                updateStatus("CAPTURED", "text-blue-600");
             } else {
                 document.getElementById('livePreview').innerText = data.text;
-                // Show hearing phrase
-                updateStatus("HEARING:\n" + data.text, "text-red-500");
+                updateStatus("HEARING...", "text-red-500");
             }
         });
 
@@ -293,6 +386,40 @@
         function selectMode(mode) {
             if (modeLocked) return;
             setMode(mode);
+        }
+
+        function toggleFontMenu() {
+            const menu = document.getElementById('fontMenu');
+            fontMenuOpen = !fontMenuOpen;
+            if (fontMenuOpen) menu.classList.remove('hidden');
+            else menu.classList.add('hidden');
+        }
+
+        function closeFontMenu() {
+            const menu = document.getElementById('fontMenu');
+            if (menu) {
+                menu.classList.add('hidden');
+                fontMenuOpen = false;
+            }
+        }
+
+        function applyFontSettings() {
+            const family = document.getElementById('fontFamilySelect').value;
+            const size = document.getElementById('fontSizeSelect').value;
+            document.getElementById('content').style.fontFamily = family;
+            document.getElementById('content').style.fontSize = size;
+            document.getElementById('docHeader').style.fontFamily = family;
+            document.getElementById('docHeader').style.fontSize = size;
+            closeFontMenu();
+        }
+
+        function toggleReviewSetting() {
+            const toggle = document.getElementById('reviewToggle');
+            if (isRecording || recordState === 'processing') {
+                toggle.checked = reviewEnabled;
+                return;
+            }
+            reviewEnabled = toggle.checked;
         }
 
         function setRecordState(state) {
@@ -378,15 +505,23 @@
             document.getElementById('countdownBadge').classList.add('hidden');
             stopWaveform();
             if (data.success) {
-                document.getElementById('content').innerHTML = data.html;
                 document.getElementById('creditDisplay').innerText = data.credits;
-                updateStatus("DONE", "text-green-600");
+                if (reviewEnabled) {
+                    pendingHtml = data.html;
+                    updateStatus("AI review in progress…", "text-blue-600");
+                    autoReview();
+                } else {
+                    document.getElementById('content').innerHTML = data.html;
+                    updateStatus("DONE", "text-green-600");
+                    setRecordState('idle');
+                    modeLocked = false;
+                }
             } else {
                 alert(data.error);
                 updateStatus("ERROR", "text-red-500");
+                setRecordState('idle');
+                modeLocked = false;
             }
-            setRecordState('idle');
-            modeLocked = false;
         }
 
         // --- RECORDING (Native Streaming) ---
@@ -398,7 +533,9 @@
             document.getElementById('timerDisplay').innerText = "00:00";
             
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+                });
 
                 if (transcriptionMode === 'live') {
                     // Live stream via AudioContext (16k PCM)
@@ -495,8 +632,8 @@
                 updateStatus("FORMATTING...", "text-blue-600");
                 const cleanContext = document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML;
                 
-                const pendingPreview = document.getElementById('livePreview').innerText;
-                const fullText = (transcriptBuffer + " " + pendingPreview).trim();
+            const pendingPreview = document.getElementById('livePreview').innerText;
+            const fullText = (transcriptBuffer + " " + pendingPreview).trim();
 
                 setTimeout(() => {
                     socket.emit('finalize-prescription', { fullTranscript: fullText, context: cleanContext });
@@ -566,6 +703,11 @@
             if (!menu || !btn) return;
             if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
                 closeModeMenu();
+            }
+            const fMenu = document.getElementById('fontMenu');
+            const fBtn = document.getElementById('fontButton');
+            if (fMenu && fBtn && !fMenu.classList.contains('hidden') && !fMenu.contains(e.target) && !fBtn.contains(e.target)) {
+                closeFontMenu();
             }
         });
 
