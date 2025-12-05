@@ -19,8 +19,8 @@
             </div>
 
             <div class="space-y-2 hidden" id="otpSection">
-                <label class="text-sm font-semibold text-slate-600">OTP (use 2345)</label>
-                <input id="regOtp" class="w-full border p-2 rounded" placeholder="2345">
+                <label class="text-sm font-semibold text-slate-600">OTP</label>
+                <input id="regOtp" class="w-full border p-2 rounded" placeholder="Enter OTP">
                 <button onclick="verifyOtp()" class="bg-emerald-600 text-white w-full py-2 rounded font-semibold">Verify OTP</button>
                 <p id="otpStatus" class="text-xs font-semibold text-emerald-700"></p>
             </div>
@@ -58,7 +58,7 @@
             });
             const data = await res.json();
             if (res.ok) {
-                document.getElementById('otpInfo').innerText = "OTP sent. Use 2345 for demo.";
+                document.getElementById('otpInfo').innerText = "OTP sent to your phone.";
                 document.getElementById('regStatus').innerText = "";
                 otpSent = true;
                 document.getElementById('otpSection').classList.remove('hidden');

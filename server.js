@@ -40,6 +40,7 @@ app.use(express.json());
 
 // --- ADMIN PASSCODE ---
 const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'adminpass';
+const REGISTRATION_OTP = process.env.REGISTRATION_OTP || '2345';
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
@@ -238,14 +239,14 @@ app.post('/api/register/send-otp', async (req, res) => {
     const existing = await db.getUser(phone);
     if (existing) return res.status(400).json({ error: "User exists" });
     req.session.pendingPhone = phone;
-    res.json({ success: true, otp: "2345" }); // NOTE: static OTP for demo
+    res.json({ success: true });
 });
 
 app.post('/api/register/verify-otp', (req, res) => {
     const { phone, otp } = req.body;
     if (!phone || !otp) return res.status(400).json({ error: "Missing fields" });
     if (phone !== req.session.pendingPhone) return res.status(400).json({ error: "Phone mismatch" });
-    if (otp !== '2345') return res.status(400).json({ error: "Invalid OTP" });
+    if (otp !== REGISTRATION_OTP) return res.status(400).json({ error: "Invalid OTP" });
     req.session.verifiedPhone = phone;
     res.json({ success: true });
 });
