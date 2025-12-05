@@ -123,8 +123,8 @@
                             </div>
                         </div>
                         <div class="relative">
-                            <button id="modeButton" onclick="toggleModeMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-200 hover:border-blue-200">
-                                <span id="modeLabel" class="flex items-center gap-1 whitespace-nowrap">⚡ Live (Faster)</span>
+                        <button id="modeButton" onclick="toggleModeMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-200 hover:border-blue-200">
+                            <span id="modeLabel" class="flex items-center gap-1 whitespace-nowrap">🔍 Offline (High Accuracy)</span>
                                 <span class="text-slate-500 text-xs">⌄</span>
                             </button>
                             <div id="modeMenu" class="hidden absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50">
@@ -216,7 +216,7 @@
         let elapsedSeconds = 0;
         const MAX_SECONDS = 300; // 5 minutes
         const GRACE_SECONDS = 15; // prevent accidental stops
-        let transcriptionMode = 'live'; // 'live' or 'offline'
+        let transcriptionMode = 'offline'; // 'live' or 'offline'
         let modeLocked = false;
         let fontMenuOpen = false;
         let reviewEnabled = true;

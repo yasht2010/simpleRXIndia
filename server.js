@@ -16,6 +16,8 @@ import fs from 'fs';
 import * as db from './database.js';
 import { generateScribePrompt, generateReviewPrompt, generateFormatPrompt } from './prompts.js';
 import crypto from 'crypto';
+import sanitizeHtml from 'sanitize-html';
+import OpenAI from 'openai';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,9 +25,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer);
-const upload = multer({ dest: 'uploads/' });
-
 if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname || '');
+        cb(null, `${Date.now()}-${Math.random().toString(16).slice(2)}${ext || '.webm'}`);
+    }
+});
+const upload = multer({
+    storage,
+    limits: { fileSize: 20 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype && file.mimetype.startsWith('audio/')) cb(null, true);
+        else cb(new Error('Invalid file type'), false);
+    }
+});
 
 // --- CONFIG CONSTANTS ---
 const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'adminpass';
@@ -61,6 +76,17 @@ const aiLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 30 });
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const TRANSCRIPTION_PROVIDER = (process.env.TRANSCRIPTION_PROVIDER || 'deepgram').toLowerCase();
+const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
+const sanitizeContent = (html = "") => sanitizeHtml(html, {
+    allowedTags: ['h1','h2','h3','h4','p','b','strong','i','em','u','ul','ol','li','table','thead','tbody','tr','th','td','hr','br','span','div'],
+    allowedAttributes: {
+        '*': ['colspan','rowspan','class','style']
+    },
+    allowedSchemes: ['http','https','mailto'],
+    disallowedTagsMode: 'discard'
+});
 
 // --- ROUTING FOR HOME/DASHBOARD ---
 app.get('/', (req, res) => {
@@ -155,6 +181,7 @@ io.on('connection', (socket) => {
     let chunkCount = 0;
     socket.on('audio-stream', async (data) => {
         // Initialize on first chunk
+        if (TRANSCRIPTION_PROVIDER !== 'deepgram') return; // live streaming only for Deepgram
         if (!dgConnection) {
             await setupDeepgram();
         }
@@ -182,7 +209,7 @@ io.on('connection', (socket) => {
 
     // C. Finalize & Format
     socket.on('finalize-prescription', async ({ fullTranscript, context }) => {
-        // Close connection immediately to save costs
+        // Close connection immediately to save costs (Deepgram only)
         if (dgConnection) {
             dgConnection.finish();
             dgConnection = null;
@@ -192,7 +219,7 @@ io.on('connection', (socket) => {
         console.log(`📝 Finalizing... Text Length: ${fullTranscript?.length}`);
 
         // If empty, trigger backup
-        if (!fullTranscript || fullTranscript.trim().length < 2) {
+        if (TRANSCRIPTION_PROVIDER !== 'deepgram' || !fullTranscript || fullTranscript.trim().length < 2) {
             socket.emit('use-backup-upload', {}); 
             return;
         }
@@ -214,7 +241,7 @@ io.on('connection', (socket) => {
             
             socket.emit('prescription-result', { 
                 success: true, 
-                html: cleanAI(result.response.text()), 
+                html: sanitizeContent(cleanAI(result.response.text())), 
                 credits: newCredits 
             });
         } catch (e) {
@@ -288,9 +315,14 @@ app.get('/api/me', async (req, res) => {
     const user = await db.getUserById(req.session.userId);
     if (!user) { req.session.destroy(); return res.status(401).json({ error: "User not found" }); }
     const credits = await db.getCredits(req.session.userId);
-    res.json({ phone: user.phone, credits: credits, header_html: user.header_html });
+    res.json({ phone: user.phone, credits: credits, header_html: sanitizeContent(user.header_html || "") });
 });
-app.post('/api/header', async (req, res) => { await db.updateHeader(req.session.userId, req.body.html); res.json({ success: true }); });
+app.post('/api/header', async (req, res) => { 
+    if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+    const clean = sanitizeContent(req.body.html || "");
+    await db.updateHeader(req.session.userId, clean); 
+    res.json({ success: true }); 
+});
 app.get('/api/macros', async (req, res) => { if (!req.session.userId) return res.json([]); res.json(await db.getMacros(req.session.userId)); });
 app.post('/api/macros', async (req, res) => { await db.saveMacro(req.session.userId, req.body.trigger, req.body.expansion); res.json({ success: true }); });
 app.post('/api/macros/delete', async (req, res) => { 
@@ -305,10 +337,22 @@ app.post('/api/review', aiLimiter, async (req, res) => {
         const { html } = req.body;
         if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
         if (!html) return res.status(400).json({ error: "Missing html" });
-        const model = genAI.getGenerativeModel({ model: REVIEW_MODEL });
         const prompt = generateReviewPrompt(html);
-        const result = await model.generateContent(prompt);
-        res.json({ success: true, reviewed: cleanAI(result.response.text()) });
+
+        let reviewed = "";
+        if (REVIEW_MODEL.toLowerCase().startsWith('gpt') && openai) {
+            const completion = await openai.chat.completions.create({
+                model: REVIEW_MODEL,
+                messages: [{ role: 'user', content: prompt }],
+            });
+            reviewed = completion.choices?.[0]?.message?.content || "";
+        } else {
+            const model = genAI.getGenerativeModel({ model: REVIEW_MODEL });
+            const result = await model.generateContent(prompt);
+            reviewed = result.response.text();
+        }
+
+        res.json({ success: true, reviewed: sanitizeContent(cleanAI(reviewed)) });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
@@ -322,7 +366,7 @@ app.post('/api/format', aiLimiter, async (req, res) => {
         const model = genAI.getGenerativeModel({ model: FORMAT_MODEL });
         const prompt = generateFormatPrompt(html);
         const result = await model.generateContent(prompt);
-        res.json({ success: true, formatted: cleanAI(result.response.text()) });
+        res.json({ success: true, formatted: sanitizeContent(cleanAI(result.response.text())) });
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
@@ -385,13 +429,25 @@ app.post('/api/process-backup', upload.single('audio'), async (req, res) => {
 
         await db.deductCredit(req.session.userId);
 
-        const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
-            fs.readFileSync(req.file.path),
-            { model: DG_MODEL, smart_format: true, language: DG_LANGUAGE, mimetype: 'audio/webm' }
-        );
-        if (error) throw error;
+        let transcript = "";
+        if (TRANSCRIPTION_PROVIDER === 'deepgram') {
+            const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
+                fs.readFileSync(req.file.path),
+                { model: DG_MODEL, smart_format: true, language: DG_LANGUAGE, mimetype: 'audio/webm' }
+            );
+            if (error) throw error;
+            transcript = result.results.channels[0].alternatives[0].transcript;
+        } else {
+            if (!openai) throw new Error("OpenAI not configured");
+            const audioFile = fs.createReadStream(req.file.path);
+            const oaRes = await openai.audio.transcriptions.create({
+                file: audioFile,
+                model: OPENAI_TRANSCRIBE_MODEL,
+                response_format: "text"
+            });
+            transcript = oaRes;
+        }
         
-        const transcript = result.results.channels[0].alternatives[0].transcript;
         const macros = await db.getMacros(req.session.userId);
         const model = genAI.getGenerativeModel({ model: SCRIBE_MODEL });
         const prompt = generateScribePrompt(transcript, req.body.context || "", macros);
@@ -399,7 +455,7 @@ app.post('/api/process-backup', upload.single('audio'), async (req, res) => {
         
         fs.unlinkSync(req.file.path);
         const newCredits = await db.getCredits(req.session.userId);
-        res.json({ success: true, html: cleanAI(aiRes.response.text()), credits: newCredits });
+        res.json({ success: true, html: sanitizeContent(cleanAI(aiRes.response.text())), credits: newCredits });
 
     } catch (e) {
         res.status(500).json({ error: e.message });
