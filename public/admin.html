@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Clinova Rx</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-slate-700">
+    <div class="min-h-screen max-w-4xl mx-auto p-6">
+        <h1 class="text-2xl font-bold text-blue-900 mb-4">Admin Panel</h1>
+
+        <div id="loginBlock" class="bg-white border rounded-lg shadow p-4 max-w-md mb-6">
+            <h2 class="font-semibold mb-2">Admin Login</h2>
+            <input id="adminPasscode" type="password" placeholder="Passcode" class="w-full border p-2 rounded mb-3">
+            <button onclick="adminLogin()" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Login</button>
+            <p id="loginStatus" class="text-sm text-red-600 mt-2"></p>
+        </div>
+
+        <div id="panelBlock" class="hidden">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-semibold">Users</h2>
+                <button onclick="logout()" class="text-sm text-red-600 underline">Logout</button>
+            </div>
+            <div class="bg-white border rounded-lg shadow p-4">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-100 text-left">
+                            <tr>
+                                <th class="p-2">Phone</th>
+                                <th class="p-2">Details</th>
+                                <th class="p-2">Prescriptions</th>
+                                <th class="p-2">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userRows"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function adminLogin() {
+            const passcode = document.getElementById('adminPasscode').value;
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ passcode })
+            });
+            if (res.ok) {
+                document.getElementById('loginBlock').classList.add('hidden');
+                document.getElementById('panelBlock').classList.remove('hidden');
+                loadUsers();
+            } else {
+                const data = await res.json();
+                document.getElementById('loginStatus').innerText = data.error || 'Login failed';
+            }
+        }
+
+        async function loadUsers() {
+            const res = await fetch('/api/admin/users');
+            if (!res.ok) return;
+            const users = await res.json();
+            const tbody = document.getElementById('userRows');
+            tbody.innerHTML = users.map(u => `
+                <tr class="border-b">
+                    <td class="p-2 font-mono">${u.phone}</td>
+                    <td class="p-2">
+                        <div class="font-semibold">${u.doctor_name || ''}</div>
+                        <div class="text-xs text-gray-500">${u.qualification || ''}</div>
+                        <div class="text-xs text-gray-500">${u.clinic_details || ''}</div>
+                    </td>
+                    <td class="p-2 font-semibold">${u.credits}</td>
+                    <td class="p-2 flex gap-2 items-center">
+                        <input type="number" min="1" placeholder="Add" class="border p-1 w-20 text-sm rounded" id="add-${u.id}">
+                        <button class="text-blue-600 text-xs underline" onclick="addCredits(${u.id})">Add</button>
+                        <button class="text-red-600 text-xs underline" onclick="removeUser(${u.id})">Remove</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function addCredits(userId) {
+            const input = document.getElementById(`add-${userId}`);
+            const amount = parseInt(input.value || '0', 10);
+            if (amount <= 0) return;
+            await fetch('/api/admin/credits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, amount })
+            });
+            input.value = '';
+            loadUsers();
+        }
+
+        async function removeUser(userId) {
+            if (!confirm('Remove this user?')) return;
+            await fetch('/api/admin/remove-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId })
+            });
+            loadUsers();
+        }
+
+        async function logout() {
+            await fetch('/api/admin/logout', { method: 'POST' });
+            document.getElementById('panelBlock').classList.add('hidden');
+            document.getElementById('loginBlock').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

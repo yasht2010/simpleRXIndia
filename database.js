@@ -73,6 +73,20 @@ export const createUser = (phone, password) => {
     });
 };
 
+export const createUserWithDetails = (phone, password, doctorName = "", qualification = "", regNo = "") => {
+    return new Promise((resolve, reject) => {
+        const hash = bcrypt.hashSync(password, 10);
+        const headerHtml = (doctorName || qualification || regNo) ? `<h1>${doctorName || ''}</h1><p>${qualification || ''}</p>` : "";
+        db.run(
+            "INSERT INTO users (phone, password, header_html, doctor_name, qualification, reg_no) VALUES (?, ?, ?, ?, ?, ?)", 
+            [phone, hash, headerHtml, doctorName, qualification, regNo],
+            function(err) {
+                if (err) reject(err); else resolve(this.lastID);
+            }
+        );
+    });
+};
+
 export const updateHeader = (userId, html) => {
     return new Promise((resolve, reject) => {
         db.run("UPDATE users SET header_html = ? WHERE id = ?", [html, userId], (err) => {
@@ -120,9 +134,33 @@ export const getCredits = (userId) => {
 
 export const deductCredit = (userId) => {
     return new Promise((resolve, reject) => {
-        db.run("UPDATE users SET credits = credits - 10 WHERE id = ? AND credits >= 10", [userId], function(err) {
+        db.run("UPDATE users SET credits = credits - 1 WHERE id = ? AND credits >= 1", [userId], function(err) {
             if (err) reject(err);
             else resolve(this.changes > 0); 
+        });
+    });
+};
+
+export const listUsers = () => {
+    return new Promise((resolve, reject) => {
+        db.all("SELECT id, phone, credits, doctor_name, qualification, clinic_details FROM users", [], (err, rows) => {
+            if (err) reject(err); else resolve(rows || []);
+        });
+    });
+};
+
+export const addCredits = (userId, amount) => {
+    return new Promise((resolve, reject) => {
+        db.run("UPDATE users SET credits = credits + ? WHERE id = ?", [amount, userId], function(err) {
+            if (err) reject(err); else resolve(this.changes > 0);
+        });
+    });
+};
+
+export const removeUser = (userId) => {
+    return new Promise((resolve, reject) => {
+        db.run("DELETE FROM users WHERE id = ?", [userId], function(err) {
+            if (err) reject(err); else resolve(this.changes > 0);
         });
     });
 };
@@ -144,6 +182,14 @@ export const saveMacro = (userId, trigger, expansion) => {
                 [userId, trigger, expansion], (err) => {
                 if (err) reject(err); else resolve(true);
             });
+        });
+    });
+};
+
+export const deleteMacro = (userId, trigger) => {
+    return new Promise((resolve, reject) => {
+        db.run("DELETE FROM macros WHERE user_id = ? AND trigger_phrase = ?", [userId, trigger], function(err) {
+            if (err) reject(err); else resolve(this.changes > 0);
         });
     });
 };

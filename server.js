@@ -13,6 +13,7 @@ import multer from 'multer';
 import fs from 'fs';
 import * as db from './database.js';
 import { generateScribePrompt } from './prompts.js';
+import crypto from 'crypto';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,14 +36,36 @@ const sessionMiddleware = session({
 });
 
 app.use(sessionMiddleware);
-app.use(express.static('public'));
 app.use(express.json());
-io.engine.use(sessionMiddleware);
+
+// --- ADMIN PASSCODE ---
+const ADMIN_PASSCODE = process.env.ADMIN_PASSCODE || 'adminpass';
 
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 
+// --- ROUTING FOR HOME/DASHBOARD ---
+app.get('/', (req, res) => {
+    if (req.session.userId) return res.redirect('/dashboard');
+    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+    if (!req.session.userId) return res.redirect('/');
+    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/register', (req, res) => {
+    if (req.session.userId) return res.redirect('/dashboard');
+    return res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
+app.use(express.static('public'));
+
 // --- 1. SOCKET LOGIC (The Live Stream) ---
+const wrap = (middleware) => (socket, next) => middleware(socket.request, socket.request.res || {}, next);
+io.use(wrap(sessionMiddleware));
+
 io.on('connection', (socket) => {
     const userId = socket.request.session.userId;
     if (!userId) { socket.disconnect(); return; }
@@ -164,7 +187,7 @@ io.on('connection', (socket) => {
         // Gemini Processing
         try {
             const macros = await db.getMacros(userId);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
             const prompt = generateScribePrompt(fullTranscript, context, macros);
             const result = await model.generateContent(prompt);
             const newCredits = await db.getCredits(userId);
@@ -195,9 +218,50 @@ app.post('/api/login', async (req, res) => {
         req.session.userId = user.id; res.json({ success: true });
     } else res.json({ success: false, message: "Invalid" });
 });
+app.post('/api/logout', (req, res) => {
+    req.session.userId = null;
+    req.session.isAdmin = false;
+    req.session.destroy(() => {
+        res.clearCookie('connect.sid');
+        res.json({ success: true });
+    });
+});
 app.post('/api/register', async (req, res) => {
     try { await db.createUser(req.body.phone, req.body.password); res.json({ success: true }); } 
     catch (e) { res.json({ success: false, message: "Exists" }); }
+});
+
+// Registration with OTP (static for now)
+app.post('/api/register/send-otp', async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "Phone required" });
+    const existing = await db.getUser(phone);
+    if (existing) return res.status(400).json({ error: "User exists" });
+    req.session.pendingPhone = phone;
+    res.json({ success: true, otp: "2345" }); // NOTE: static OTP for demo
+});
+
+app.post('/api/register/verify-otp', (req, res) => {
+    const { phone, otp } = req.body;
+    if (!phone || !otp) return res.status(400).json({ error: "Missing fields" });
+    if (phone !== req.session.pendingPhone) return res.status(400).json({ error: "Phone mismatch" });
+    if (otp !== '2345') return res.status(400).json({ error: "Invalid OTP" });
+    req.session.verifiedPhone = phone;
+    res.json({ success: true });
+});
+
+app.post('/api/register/complete', async (req, res) => {
+    const { phone, password, doctor_name, qualification, reg_no } = req.body;
+    if (!req.session.verifiedPhone || req.session.verifiedPhone !== phone) return res.status(400).json({ error: "OTP not verified" });
+    try {
+        await db.createUserWithDetails(phone, password, doctor_name || "", qualification || "", reg_no || "");
+        // clear verification
+        req.session.pendingPhone = null;
+        req.session.verifiedPhone = null;
+        res.json({ success: true });
+    } catch (e) {
+        res.status(400).json({ error: "Registration failed" });
+    }
 });
 app.get('/api/me', async (req, res) => {
     if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
@@ -209,8 +273,60 @@ app.get('/api/me', async (req, res) => {
 app.post('/api/header', async (req, res) => { await db.updateHeader(req.session.userId, req.body.html); res.json({ success: true }); });
 app.get('/api/macros', async (req, res) => { if (!req.session.userId) return res.json([]); res.json(await db.getMacros(req.session.userId)); });
 app.post('/api/macros', async (req, res) => { await db.saveMacro(req.session.userId, req.body.trigger, req.body.expansion); res.json({ success: true }); });
+app.post('/api/macros/delete', async (req, res) => { 
+    if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+    await db.deleteMacro(req.session.userId, req.body.trigger);
+    res.json({ success: true }); 
+});
 app.get('/settings', async (req, res) => { if (!req.session.userId) return res.status(401).json({}); res.json(await db.getSettings(req.session.userId) || {}); });
 app.post('/settings', async (req, res) => { if (!req.session.userId) return res.status(401).json({}); await db.saveSettings(req.session.userId, req.body); res.json({ success: true }); });
+
+// --- ADMIN ROUTES ---
+const requireAdmin = (req, res, next) => {
+    if (req.session.isAdmin) return next();
+    return res.status(401).json({ error: 'Unauthorized' });
+};
+
+app.post('/api/admin/login', (req, res) => {
+    const { passcode } = req.body;
+    if (passcode && passcode === ADMIN_PASSCODE) {
+        req.session.isAdmin = true;
+        res.json({ success: true });
+    } else {
+        res.status(401).json({ success: false, error: 'Invalid passcode' });
+    }
+});
+
+app.post('/api/admin/logout', (req, res) => {
+    req.session.isAdmin = false;
+    res.json({ success: true });
+});
+
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+    const users = await db.listUsers();
+    res.json(users.map(u => ({
+        id: u.id,
+        phone: u.phone,
+        doctor_name: u.doctor_name,
+        qualification: u.qualification,
+        clinic_details: u.clinic_details,
+        credits: u.credits // represent prescriptions count
+    })));
+});
+
+app.post('/api/admin/credits', requireAdmin, async (req, res) => {
+    const { userId, amount } = req.body;
+    if (!userId || !amount) return res.status(400).json({ error: 'Missing params' });
+    await db.addCredits(userId, Number(amount));
+    res.json({ success: true });
+});
+
+app.post('/api/admin/remove-user', requireAdmin, async (req, res) => {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    await db.removeUser(userId);
+    res.json({ success: true });
+});
 
 // --- 3. BACKUP UPLOAD ENDPOINT ---
 app.post('/api/process-backup', upload.single('audio'), async (req, res) => {
@@ -228,7 +344,7 @@ app.post('/api/process-backup', upload.single('audio'), async (req, res) => {
         
         const transcript = result.results.channels[0].alternatives[0].transcript;
         const macros = await db.getMacros(req.session.userId);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
         const prompt = generateScribePrompt(transcript, req.body.context || "", macros);
         const aiRes = await model.generateContent(prompt);
         
@@ -242,4 +358,4 @@ app.post('/api/process-backup', upload.single('audio'), async (req, res) => {
 });
 
 const PORT = 3000;
-httpServer.listen(PORT, () => console.log(`\n🚀 SmartRx Pro running on port ${PORT}\n`));
+httpServer.listen(PORT, () => console.log(`\n🚀 Clinova Rx running on port ${PORT}\n`));

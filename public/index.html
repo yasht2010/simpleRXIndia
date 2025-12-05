@@ -3,58 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartRx</title>
+    <title>Clinova Rx</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>@media print { .no-print { display: none !important; } body { background: white; } .print-area { border: none; box-shadow: none; padding: 0; } }</style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4 font-sans">
+<body class="bg-gradient-to-br from-sky-50 via-white to-blue-50 min-h-screen p-6 font-sans">
 
     <!-- LOGIN UI -->
-    <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white p-8 rounded-xl shadow-xl w-full max-w-md">
-            <h1 class="text-2xl font-bold text-blue-900 mb-2">SmartRx Pro 🩺</h1>
-            <input id="loginPhone" placeholder="Phone Number" class="w-full border p-3 rounded mb-3">
-            <input id="loginPass" type="password" placeholder="Password" class="w-full border p-3 rounded mb-4">
-            <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700">Login</button>
-            <p onclick="toggleRegister()" class="text-center text-xs text-gray-400 mt-4 cursor-pointer hover:underline">Register</p>
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center">
+        <div class="w-full max-w-5xl grid md:grid-cols-2 gap-8 items-center">
+            <div class="space-y-4">
+                <p class="inline-flex items-center gap-2 text-xs font-semibold text-blue-700 bg-blue-100 px-3 py-1 rounded-full w-fit">Clinova Rx · India</p>
+                <h1 class="text-4xl md:text-5xl font-extrabold text-blue-900 leading-tight">Dictate faster, prescribe smarter.</h1>
+                <p class="text-lg text-slate-700">Voice-first scribing built for Indian doctors. Capture visits in seconds, auto-format Rx, and print instantly.</p>
+                <div class="grid grid-cols-2 gap-4 text-sm text-slate-700">
+                    <div class="bg-white/80 border border-blue-100 rounded-xl p-4 shadow-sm">
+                        <div class="text-2xl font-bold text-blue-900">10x</div>
+                        <div class="text-xs uppercase tracking-wide text-slate-500">Faster note taking</div>
+                    </div>
+                    <div class="bg-white/80 border border-emerald-100 rounded-xl p-4 shadow-sm">
+                        <div class="text-2xl font-bold text-emerald-700">Safe</div>
+                        <div class="text-xs uppercase tracking-wide text-slate-500">On-device mic, secured APIs</div>
+                    </div>
+                </div>
+                <ul class="space-y-2 text-sm text-slate-700">
+                    <li class="flex items-start gap-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-500"></span> Live transcription tuned for EN-IN medical dictation</li>
+                    <li class="flex items-start gap-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-500"></span> One-tap macros for common protocols and advice</li>
+                    <li class="flex items-start gap-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-500"></span> Print-ready HTML prescription with your header and NMC ID</li>
+                </ul>
+            </div>
+            <div class="bg-white p-8 rounded-2xl shadow-2xl border border-blue-100">
+                <h2 class="text-2xl font-bold text-blue-900 mb-2">Login to continue</h2>
+                <p class="text-sm text-slate-600 mb-4">Access your prescriptions, macros, and settings.</p>
+                <input id="loginPhone" placeholder="Phone Number" class="w-full border p-3 rounded mb-3 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                <input id="loginPass" type="password" placeholder="Password" class="w-full border p-3 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                <p id="loginError" class="text-xs text-red-600 h-4 mb-2"></p>
+                <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700 transition">Login</button>
+                <div class="text-center text-xs text-gray-500 mt-4">
+                    New here? <a href="/register" class="text-blue-700 font-semibold hover:underline">Create an account</a>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- MAIN APP -->
     <div id="appScreen" class="hidden min-h-screen flex flex-col items-center p-4">
         <div class="w-full max-w-3xl flex justify-between items-center mb-4 no-print">
-            <div class="text-blue-900 font-bold">SmartRx</div>
+            <div class="text-blue-900 font-bold">Clinova Rx</div>
             <div class="flex gap-4 text-sm font-medium">
-                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">Credits: ₹<span id="creditDisplay">0</span></span>
+                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">Prescriptions: <span id="creditDisplay">0</span></span>
                 <button onclick="logout()" class="text-red-500">Logout</button>
             </div>
         </div>
 
         <div class="max-w-3xl w-full bg-white rounded-xl shadow-xl overflow-hidden print-area min-h-[85vh] flex flex-col relative">
-            <div id="docHeader" contenteditable="true" class="p-8 border-b-2 border-gray-800 cursor-text hover:bg-gray-50 transition" onblur="saveHeader()"></div>
+            <div class="p-4 flex justify-end items-center gap-3 border-b border-gray-200 no-print">
+                <span id="headerStatus" class="text-xs text-green-600"></span>
+                <button onclick="saveHeader()" class="text-xs text-white bg-[#1769AA] px-3 py-1 rounded shadow">Save Header</button>
+            </div>
+            <div id="docHeader" contenteditable="true" class="p-8 cursor-text hover:bg-gray-50 transition"></div>
             <div id="livePreview" class="px-8 pt-2 text-gray-400 text-sm italic h-6 overflow-hidden"></div>
             <div id="content" contenteditable="true" class="p-8 flex-grow prose max-w-none focus:outline-none">
-                <p id="placeholder" class="text-gray-300 italic no-print">Press Spacebar to dictate...</p>
+                <p id="placeholder" class="text-gray-300 italic no-print">Tap to start prescription...</p>
             </div>
-            <div class="bg-gray-50 p-4 border-t no-print">
-            <div class="flex flex-col items-center gap-2">
-                <div id="timerDisplay" class="text-gray-700 font-mono text-sm">00:00</div>
-                <canvas id="waveform" class="w-full max-w-xs h-14 bg-black/5 rounded-lg"></canvas>
-                <button id="recordFab" onclick="handleRecordAction()" class="w-20 h-20 rounded-full bg-red-600 text-white shadow-xl flex items-center justify-center transition-all active:scale-95">
-                    <div id="recordIcon" class="w-6 h-6 rounded-full bg-white"></div>
-                </button>
-                <p id="recordLabel" class="text-xs font-semibold text-gray-700">Start Prescription</p>
-            </div>
-            <p id="status" class="text-center text-xs text-gray-500 font-bold mb-3 min-h-[1.5rem] whitespace-pre-line px-4">READY</p>
-            <div class="flex justify-between items-center">
-                <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-blue-600 text-sm font-semibold underline">💊 Voice Macros</button>
-                <div class="flex gap-2">
-                    <button onclick="window.location.reload()" class="px-3 py-1 text-gray-500 text-xs">New Patient</button>
-                    <button onclick="window.print()" class="bg-gray-900 text-white px-4 py-2 rounded text-sm font-bold">Print</button>
+            <div class="bg-white p-6 border-t no-print">
+                <div class="w-full max-w-3xl mx-auto flex flex-col items-center gap-3">
+                    <div id="countdownBadge" class="hidden text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-full"></div>
+                    <div class="w-full">
+                        <canvas id="waveform" class="w-full h-8 rounded-full bg-black/5 opacity-0 transition-opacity duration-500"></canvas>
+                    </div>
+                    <div class="relative flex flex-col items-center gap-1">
+                        <button id="recordFab" onclick="handleRecordAction()" class="w-16 h-16 rounded-full bg-[#1769AA] text-white shadow-lg flex items-center justify-center transition-all active:scale-95">
+                            <svg id="recordIcon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z"/><path d="M7 11a5 5 0 0 0 10 0h-1.5a3.5 3.5 0 0 1-7 0H7Z"/><path d="M12 17v3m0 0h-3m3 0h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p id="recordLabel" class="text-sm font-semibold text-[#4A5568]">Tap to start prescription</p>
+                    <p id="status" class="text-center text-xs text-gray-500 font-bold min-h-[1.5rem] whitespace-pre-line px-4">READY</p>
+                </div>
+                <div class="w-full grid grid-cols-1 md:grid-cols-3 items-center mt-4 gap-3">
+                    <div class="flex justify-start">
+                        <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-[#1769AA] text-sm font-semibold underline">💊 Voice Macros</button>
+                    </div>
+                    <div class="flex justify-center">
+                        <div class="text-[#1769AA] font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                    <button onclick="window.location.reload()" class="px-3 py-1 text-gray-500 text-xs">Clear</button>
+                        <button onclick="handlePrint()" class="bg-gray-900 text-white px-4 py-2 rounded text-sm font-bold">Print</button>
+                    </div>
                 </div>
             </div>
-        </div>
         </div>
     </div>
 
@@ -75,15 +116,27 @@
     </div>
 
     <div id="macroModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print">
-        <div class="bg-white rounded p-6 w-full max-w-md shadow-xl">
-            <h2 class="font-bold mb-4">Macros</h2>
+        <div class="bg-white rounded p-6 w-full max-w-2xl shadow-xl">
+            <h2 class="font-bold mb-1">Macros</h2>
+            <p class="text-xs text-gray-500 mb-3">Speak the trigger phrase during dictation to insert the macro (e.g., “apply fever protocol”).</p>
             <input id="macroTrigger" placeholder="Trigger" class="w-full border p-2 mb-2 rounded">
-            <textarea id="macroExpansion" placeholder="Expansion..." class="w-full border p-2 mb-2 rounded h-20"></textarea>
+            <textarea id="macroExpansion" placeholder="Expansion..." class="w-full border p-2 mb-2 rounded h-40"></textarea>
             <div class="flex justify-end gap-2">
                 <button onclick="document.getElementById('macroModal').classList.add('hidden')" class="px-4 py-2 text-gray-600">Close</button>
                 <button onclick="saveMacro()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
             </div>
-            <div id="macroList" class="mt-4 pt-4 border-t text-xs h-32 overflow-y-auto"></div>
+            <div id="macroList" class="mt-4 pt-4 border-t text-xs h-48 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <div id="consentModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 class="text-lg font-bold text-blue-900 mb-2">Confirm &amp; Print</h2>
+            <p class="text-sm text-gray-700 mb-4">I understand the prescriptions are generated by Clinova Rx and I accept full responsibility for clinical decisions and patient risk.</p>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeConsent()" class="px-4 py-2 text-gray-600 rounded">Cancel</button>
+                <button onclick="confirmConsent()" class="px-4 py-2 bg-blue-600 text-white rounded">Agree &amp; Print</button>
+            </div>
         </div>
     </div>
 
@@ -107,6 +160,9 @@
         let audioCtx, sourceNode, processorNode, analyserNode, waveformAnim;
         let pcmQueue = [];
         let recordState = 'idle'; // idle | recording | processing
+        let elapsedSeconds = 0;
+        const MAX_SECONDS = 300; // 5 minutes
+        const GRACE_SECONDS = 15; // prevent accidental stops
 
         // --- AUTH ---
         window.onload = initApp;
@@ -115,13 +171,21 @@
             const pass = document.getElementById('loginPass').value;
             const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone, password: pass }) });
             const data = await res.json();
-            if (data.success) initApp(); else alert("Login Failed");
+            if (data.success) {
+                document.getElementById('loginError').innerText = "";
+                window.location.href = '/dashboard';
+            } else {
+                document.getElementById('loginError').innerText = "Login failed. Check phone/password.";
+            }
         }
         async function toggleRegister() {
             const phone = prompt("New Phone:"); const pass = prompt("New Password:");
             if(phone && pass) { await fetch('/api/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone, password: pass }) }); alert("Registered. Please login."); }
         }
-        async function logout() { location.reload(); }
+        async function logout() { 
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.href = '/';
+        }
         async function initApp() {
             try {
                 const res = await fetch('/api/me');
@@ -135,7 +199,15 @@
             } catch (e) {}
         }
         async function saveHeader() {
-            await fetch('/api/header', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ html: document.getElementById('docHeader').innerHTML }) });
+            const statusEl = document.getElementById('headerStatus');
+            try {
+                await fetch('/api/header', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ html: document.getElementById('docHeader').innerHTML }) });
+                statusEl.innerText = "Header saved";
+                setTimeout(() => { statusEl.innerText = ""; }, 2000);
+            } catch (e) {
+                statusEl.innerText = "Save failed";
+                setTimeout(() => { statusEl.innerText = ""; }, 2000);
+            }
         }
 
         // --- SOCKET EVENTS ---
@@ -174,22 +246,23 @@
             const fab = document.getElementById('recordFab');
             const icon = document.getElementById('recordIcon');
             const label = document.getElementById('recordLabel');
+            const wave = document.getElementById('waveform');
 
             if (state === 'idle') {
-                fab.className = "w-20 h-20 rounded-full bg-red-600 text-white shadow-xl flex items-center justify-center transition-all active:scale-95";
-                icon.className = "w-6 h-6 rounded-full bg-white";
-                icon.style.borderRadius = "999px";
-                label.innerText = "Start Prescription";
+                fab.className = "w-16 h-16 rounded-full bg-[#1769AA] text-white shadow-lg flex items-center justify-center transition-all active:scale-95";
+                icon.className = "w-7 h-7";
+                label.innerText = "Tap to start prescription";
+                wave.classList.add('opacity-0');
             } else if (state === 'recording') {
-                fab.className = "w-20 h-20 rounded-full bg-red-700 text-white shadow-xl flex items-center justify-center transition-all scale-105";
-                icon.className = "w-5 h-5 bg-white";
-                icon.style.borderRadius = "6px";
+                fab.className = "w-16 h-16 rounded-full bg-red-600 text-white shadow-lg flex items-center justify-center transition-all scale-105";
+                icon.className = "w-5 h-5";
                 label.innerText = "Recording...";
+                wave.classList.remove('opacity-0');
             } else if (state === 'processing') {
-                fab.className = "w-20 h-20 rounded-full bg-gray-700 text-white shadow-xl flex items-center justify-center transition-all animate-pulse";
-                icon.className = "w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin";
-                icon.style.borderRadius = "999px";
+                fab.className = "w-16 h-16 rounded-full bg-gray-500 text-white shadow-lg flex items-center justify-center transition-all animate-pulse";
+                icon.className = "w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin";
                 label.innerText = "Processing...";
+                wave.classList.add('opacity-0');
             }
         }
 
@@ -198,15 +271,16 @@
             const ctx = canvas.getContext('2d');
             canvas.width = canvas.clientWidth;
             canvas.height = canvas.clientHeight;
+            analyserNode.fftSize = 128;
             const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
 
             const draw = () => {
                 analyserNode.getByteTimeDomainData(dataArray);
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = "#e5e7eb";
+                ctx.fillStyle = "rgba(23,105,170,0.08)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.strokeStyle = "#ef4444";
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = "#1769AA";
+                ctx.lineWidth = 1.5;
                 ctx.beginPath();
                 const sliceWidth = canvas.width / dataArray.length;
                 let x = 0;
@@ -230,6 +304,7 @@
             const canvas = document.getElementById('waveform');
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.classList.add('opacity-0');
         }
 
         function flushPcmQueue() {
@@ -243,6 +318,11 @@
         }
 
         function handleResult(data) {
+            if (timerInterval) clearInterval(timerInterval);
+            elapsedSeconds = 0;
+            document.getElementById('timerDisplay').innerText = "00:00";
+            document.getElementById('countdownBadge').classList.add('hidden');
+            stopWaveform();
             if (data.success) {
                 document.getElementById('content').innerHTML = data.html;
                 document.getElementById('creditDisplay').innerText = data.credits;
@@ -260,8 +340,6 @@
             transcriptBuffer = "";
             backupAudioChunks = [];
             startTime = Date.now();
-            isPaused = false;
-            updateStatus("LISTENING...", "text-red-500");
             document.getElementById('timerDisplay').innerText = "00:00";
             
             try {
@@ -306,22 +384,33 @@
 
                 isRecording = true;
                 setRecordState('recording');
+                updateStatus("LISTENING...", "text-red-500");
                 startTimer();
                 startWaveform();
 
-            } catch (e) { alert("Mic Error: " + e.message); }
+            } catch (e) { 
+                updateStatus("Mic permission denied", "text-red-500");
+                setRecordState('idle');
+            }
         }
 
         function handleRecordAction() {
             if (recordState === 'idle') startRecording();
-            else if (recordState === 'recording') stopRecording();
+            else if (recordState === 'recording') {
+                if (elapsedSeconds < GRACE_SECONDS) {
+                    updateStatus(`Keep talking… (${GRACE_SECONDS - elapsedSeconds}s min)`, "text-amber-600");
+                    return;
+                }
+                stopRecording(false);
+            }
         }
 
-        function stopRecording() {
+        function stopRecording(autoStop = false) {
             if (!isRecording) return;
             isRecording = false;
             clearInterval(timerInterval);
             setRecordState('processing');
+            document.getElementById('countdownBadge').classList.add('hidden');
             flushPcmQueue();
             if (processorNode) { processorNode.disconnect(); processorNode.onaudioprocess = null; processorNode = null; }
             if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
@@ -333,7 +422,7 @@
             if(mediaRecorder && mediaRecorder.stream) mediaRecorder.stream.getTracks().forEach(t => t.stop());
 
             const duration = Date.now() - startTime;
-            if (duration < 2000) { 
+            if (!autoStop && duration < 2000) { 
                 updateStatus("Cancelled (<2s)", "text-gray-500");
                 setRecordState('idle');
                 return;
@@ -366,20 +455,43 @@
             }
         }
 
+        function handlePrint() {
+            document.getElementById('consentModal').classList.remove('hidden');
+        }
+
+        function closeConsent() {
+            document.getElementById('consentModal').classList.add('hidden');
+        }
+
+        function confirmConsent() {
+            document.getElementById('consentModal').classList.add('hidden');
+            window.print();
+        }
+
         function startTimer() {
             const timerEl = document.getElementById('timerDisplay');
-            let secondsElapsed = 0;
+            const badge = document.getElementById('countdownBadge');
+            elapsedSeconds = 0;
+            if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
-                secondsElapsed++;
-                const m = Math.floor(secondsElapsed / 60);
-                const s = secondsElapsed % 60;
+                elapsedSeconds++;
+                const remaining = MAX_SECONDS - elapsedSeconds;
+                const m = Math.floor(elapsedSeconds / 60);
+                const s = elapsedSeconds % 60;
                 timerEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                if (remaining <= 30 && remaining >= 0) {
+                    badge.classList.remove('hidden');
+                    badge.innerText = `Stopping in ${remaining}s`;
+                } else {
+                    badge.classList.add('hidden');
+                }
+                if (elapsedSeconds >= MAX_SECONDS) {
+                    stopRecording(true);
+                }
             }, 1000);
         }
 
         // Events
-        document.addEventListener('keydown', (e) => { if(e.code==='Space' && !e.repeat && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') handleRecordAction(); });
-        document.addEventListener('keyup', (e) => { if(e.code==='Space' && recordState === 'recording') stopRecording(); });
 
         // Macros Logic
         function openSettings() { document.getElementById('settingsModal').classList.remove('hidden'); }
@@ -390,7 +502,17 @@
         async function loadMacros() {
             const res = await fetch('/api/macros');
             const data = await res.json();
-            document.getElementById('macroList').innerHTML = data.map(m => `<div class="border-b py-1"><b>${m.trigger_phrase}:</b> ${m.expansion}</div>`).join('');
+            document.getElementById('macroList').innerHTML = data.map(m => `
+                <div class="border-b py-2 flex justify-between items-start gap-2">
+                    <div>
+                        <div class="font-semibold text-gray-800">${m.trigger_phrase}</div>
+                        <div class="text-gray-600 text-[11px] whitespace-pre-line">${m.expansion}</div>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <button class="text-blue-600 text-[11px] underline" onclick="editMacro('${m.trigger_phrase.replace(/'/g,"\\'")}','${m.expansion.replace(/'/g,"\\'")}')">Edit</button>
+                        <button class="text-red-600 text-[11px] underline" onclick="deleteMacro('${m.trigger_phrase.replace(/'/g,"\\'")}')">Delete</button>
+                    </div>
+                </div>`).join('');
         }
         async function saveMacro() {
             await fetch('/api/macros', {
@@ -398,6 +520,17 @@
                 body: JSON.stringify({ trigger: document.getElementById('macroTrigger').value, expansion: document.getElementById('macroExpansion').value })
             });
             document.getElementById('macroTrigger').value = ''; document.getElementById('macroExpansion').value = '';
+            loadMacros();
+        }
+        function editMacro(trigger, expansion) {
+            document.getElementById('macroTrigger').value = trigger;
+            document.getElementById('macroExpansion').value = expansion;
+        }
+        async function deleteMacro(trigger) {
+            await fetch('/api/macros/delete', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ trigger })
+            });
             loadMacros();
         }
 
