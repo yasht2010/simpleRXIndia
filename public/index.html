@@ -57,7 +57,7 @@
             </div>
         </div>
 
-        <div class="max-w-3xl w-full bg-white rounded-xl shadow-xl overflow-hidden print-area min-h-[85vh] flex flex-col relative">
+        <div class="max-w-3xl w-full bg-white rounded-xl shadow-xl overflow-visible print-area min-h-[85vh] flex flex-col relative">
             <div class="p-4 flex justify-end items-center gap-3 border-b border-gray-200 no-print">
                 <span id="headerStatus" class="text-xs text-green-600"></span>
                 <button onclick="saveHeader()" class="text-xs text-white bg-[#1769AA] px-3 py-1 rounded shadow">Save Header</button>
@@ -83,20 +83,20 @@
                     <p id="recordLabel" class="text-sm font-semibold text-[#4A5568]">Tap to start prescription</p>
                     <p id="status" class="text-center text-xs text-gray-500 font-bold min-h-[1.5rem] whitespace-pre-line px-4">READY</p>
                 </div>
-                <div class="w-full grid grid-cols-1 md:grid-cols-3 items-center mt-4 gap-3">
+                <div class="w-full flex flex-col gap-3 md:grid md:grid-cols-3 md:items-center mt-4">
                     <div class="flex justify-start">
                         <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-[#1769AA] text-sm font-semibold underline">💊 Voice Macros</button>
                     </div>
                     <div class="flex justify-center">
                         <div class="text-[#1769AA] font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
                     </div>
-                    <div class="flex justify-end items-center gap-2">
+                    <div class="flex flex-wrap justify-end items-center gap-2">
                         <div class="relative">
                             <button id="modeButton" onclick="toggleModeMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-200 hover:border-blue-200">
                                 <span id="modeLabel" class="flex items-center gap-1 whitespace-nowrap">⚡ Live (Faster)</span>
                                 <span class="text-slate-500 text-xs">⌄</span>
                             </button>
-                            <div id="modeMenu" class="hidden absolute right-0 bottom-full mb-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50">
+                            <div id="modeMenu" class="hidden absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50">
                                 <div class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-50" onclick="selectMode('live')">
                                     <span class="flex items-center gap-2 whitespace-nowrap">⚡ Live (Faster)</span>
                                     <span id="checkLive" class="text-blue-600 text-xs">✓</span>
