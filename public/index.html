@@ -6,98 +6,147 @@
     <title>Clinova Rx</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <style>@media print { .no-print { display: none !important; } body { background: white; } .print-area { border: none; box-shadow: none; padding: 0; } }</style>
+    <style>
+        @media print { 
+            * { background: transparent !important; box-shadow: none !important; color: black !important; }
+            .no-print { display: none !important; } 
+            body { background: white !important; font-size: 12pt; margin: 0; }
+            .print-area { border: none !important; box-shadow: none !important; padding: 0 !important; }
+        }
+    </style>
 </head>
-<body class="bg-gradient-to-br from-sky-50 via-white to-blue-50 min-h-screen p-6 font-sans">
+<body class="bg-slate-50 min-h-screen p-6 md:p-8 font-sans text-slate-800 text-base leading-relaxed">
 
     <!-- LOGIN UI -->
     <div id="loginScreen" class="min-h-screen flex items-center justify-center">
-        <div class="w-full max-w-5xl grid md:grid-cols-2 gap-8 items-center">
+        <div class="w-full max-w-5xl grid md:grid-cols-2 gap-10 items-center">
             <div class="space-y-4">
-                <p class="inline-flex items-center gap-2 text-xs font-semibold text-blue-700 bg-blue-100 px-3 py-1 rounded-full w-fit">Clinova Rx · India</p>
-                <h1 class="text-4xl md:text-5xl font-extrabold text-blue-900 leading-tight">Dictate faster, prescribe smarter.</h1>
+                <p class="inline-flex items-center gap-2 text-xs font-semibold text-blue-900 bg-blue-100 px-3 py-1 rounded-full w-fit tracking-tight">Clinova Rx · India</p>
+                <h1 class="text-4xl md:text-5xl font-extrabold text-blue-900 leading-tight tracking-tight">Dictate faster, prescribe smarter.</h1>
                 <p class="text-lg text-slate-700">Voice-first scribing built for Indian doctors. Capture visits in seconds, auto-format Rx, and print instantly.</p>
                 <div class="grid grid-cols-2 gap-4 text-sm text-slate-700">
-                    <div class="bg-white/80 border border-blue-100 rounded-xl p-4 shadow-sm">
+                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-lg">
                         <div class="text-2xl font-bold text-blue-900">10x</div>
                         <div class="text-xs uppercase tracking-wide text-slate-500">Faster note taking</div>
                     </div>
-                    <div class="bg-white/80 border border-emerald-100 rounded-xl p-4 shadow-sm">
-                        <div class="text-2xl font-bold text-emerald-700">Safe</div>
+                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-lg">
+                        <div class="text-2xl font-bold text-blue-900">Secure</div>
                         <div class="text-xs uppercase tracking-wide text-slate-500">On-device mic, secured APIs</div>
                     </div>
                 </div>
                 <ul class="space-y-2 text-sm text-slate-700">
-                    <li class="flex items-start gap-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-500"></span> Live transcription tuned for EN-IN medical dictation</li>
-                    <li class="flex items-start gap-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-500"></span> One-tap macros for common protocols and advice</li>
-                    <li class="flex items-start gap-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-500"></span> Print-ready HTML prescription with your header and NMC ID</li>
+                    <li class="flex items-start gap-2"><span class="mt-2 h-1.5 w-1.5 rounded-full bg-blue-700"></span> Live transcription tuned for EN-IN medical dictation</li>
+                    <li class="flex items-start gap-2"><span class="mt-2 h-1.5 w-1.5 rounded-full bg-blue-700"></span> One-tap macros for common protocols and advice</li>
+                    <li class="flex items-start gap-2"><span class="mt-2 h-1.5 w-1.5 rounded-full bg-blue-700"></span> Print-ready HTML prescription with your header and NMC ID</li>
                 </ul>
             </div>
-            <div class="bg-white p-8 rounded-2xl shadow-2xl border border-blue-100">
-                <h2 class="text-2xl font-bold text-blue-900 mb-2">Login to continue</h2>
+            <div class="bg-white p-8 rounded-2xl shadow-2xl border border-slate-200">
+                <h2 class="text-2xl font-bold text-blue-900 mb-2 tracking-tight">Login to continue</h2>
                 <p class="text-sm text-slate-600 mb-4">Access your prescriptions, macros, and settings.</p>
-                <input id="loginPhone" placeholder="Phone Number" class="w-full border p-3 rounded mb-3 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                <input id="loginPass" type="password" placeholder="Password" class="w-full border p-3 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                <p id="loginError" class="text-xs text-red-600 h-4 mb-2"></p>
-                <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700 transition">Login</button>
-                <div class="text-center text-xs text-gray-500 mt-4">
-                    New here? <a href="/register" class="text-blue-700 font-semibold hover:underline">Create an account</a>
+                <input id="loginPhone" placeholder="Phone Number" class="w-full bg-slate-50 border border-slate-300 p-3 rounded-md mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <input id="loginPass" type="password" placeholder="Password" class="w-full bg-slate-50 border border-slate-300 p-3 rounded-md mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <p id="loginError" class="text-xs text-rose-600 h-4 mb-2"></p>
+                <button onclick="login()" class="w-full bg-blue-800 hover:bg-blue-900 text-white py-3 rounded-lg font-semibold shadow transition-all">Login</button>
+                <div class="text-center text-xs text-slate-500 mt-4">
+                    New here? <a href="/register" class="text-blue-800 font-semibold hover:underline">Create an account</a>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- MAIN APP -->
-    <div id="appScreen" class="hidden min-h-screen flex flex-col items-center p-4">
-        <div class="w-full max-w-3xl mb-1 no-print">
-            <div class="text-blue-900 font-extrabold text-3xl">Clinova Rx</div>
+    <div id="appScreen" class="hidden min-h-screen flex flex-col items-center gap-4">
+        <div class="w-full max-w-3xl no-print">
+            <div class="text-blue-900 font-extrabold text-3xl tracking-tight">Clinova Rx</div>
         </div>
-        <div class="w-full max-w-3xl flex justify-between items-center mb-4 no-print">
-            <div class="flex items-center gap-4">
-                <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-[#1769AA] text-sm font-semibold underline">💊 Voice Macros</button>
-            </div>
-            <div class="flex gap-4 text-sm font-medium">
-                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full">Prescriptions: <span id="creditDisplay">0</span></span>
-                <button onclick="logout()" class="text-red-500">Logout</button>
+        <div class="w-full max-w-3xl no-print mb-4">
+            <div class="grid grid-cols-3 items-center gap-2 bg-white border border-slate-200 rounded-lg shadow px-4 py-3 text-sm font-semibold text-slate-800">
+                <div class="flex items-center justify-start">
+                    <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-slate-800 hover:text-blue-700">Voice Macros</button>
+                </div>
+                <div class="flex justify-center">
+                    <div id="aiReviewToggle" class="relative flex items-center gap-2 bg-white border border-slate-200 rounded-md px-3 py-2 cursor-pointer hover:shadow-md transition" onclick="handleAiToggleClick()">
+                        <div class="flex flex-col leading-tight">
+                            <div class="text-[10px] uppercase tracking-wide text-slate-500">AI Reviewer</div>
+                            <div id="aiToggleLabel" class="text-sm font-semibold text-blue-900">Enabled</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="relative group">
+                                <button type="button" class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-bold focus:outline-none">
+                                    i
+                                </button>
+                                <div class="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg shadow-xl px-3 py-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition z-40">
+                                    Automatically reviews AI output for safety, catches hallucinations, and formats before printing.
+                                </div>
+                            </div>
+                            <div id="aiToggleTrack" class="w-12 h-6 rounded-full bg-slate-200 transition relative overflow-hidden">
+                                <div id="aiToggleKnob" class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-3">
+                    <span class="px-3 py-1 rounded-full bg-slate-100 text-slate-800">Prescriptions: <span id="creditDisplay">0</span></span>
+                    <button onclick="logout()" class="text-slate-700 hover:text-blue-700">Logout</button>
+                </div>
             </div>
         </div>
 
-        <div class="max-w-3xl w-full bg-white rounded-xl shadow-xl overflow-visible print-area min-h-[85vh] flex flex-col relative">
-            <div class="p-4 flex justify-end items-center gap-3 border-b border-gray-200 no-print">
-                <span id="headerStatus" class="text-xs text-green-600"></span>
-                <button onclick="saveHeader()" class="text-xs text-white bg-[#1769AA] px-3 py-1 rounded shadow">Save Header</button>
+        <div class="max-w-3xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-visible print-area min-h-[80vh] flex flex-col relative">
+            <div class="px-6 py-4 flex justify-end items-center border-b border-slate-100 no-print">
+                <span id="headerStatus" class="text-xs text-emerald-600 h-4 font-semibold"></span>
             </div>
-            <div id="docHeader" contenteditable="true" class="p-8 cursor-text hover:bg-gray-50 transition"></div>
-            <div id="livePreview" class="px-8 pt-2 text-gray-400 text-sm italic h-6 overflow-hidden"></div>
-            <div id="content" contenteditable="true" class="p-8 flex-grow prose max-w-none focus:outline-none">
-                <p id="placeholder" class="text-gray-300 italic no-print">Tap to start prescription...</p>
+            <div class="relative">
+                <div id="docHeader" contenteditable="true" class="p-8 cursor-text hover:bg-slate-50 transition font-sans text-slate-800"></div>
+                <div id="headerActions" class="hidden absolute top-4 right-6 flex items-center gap-2 bg-white/95 border border-slate-200 rounded-md shadow px-2 py-1 no-print">
+                    <button onclick="saveHeader()" class="w-8 h-8 flex items-center justify-center rounded-md bg-emerald-500 text-white hover:bg-emerald-600 transition" aria-label="Save header">
+                        <svg class="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 10.5 8.5 15 16 6"/>
+                        </svg>
+                    </button>
+                    <button onclick="discardHeaderChanges()" class="w-8 h-8 flex items-center justify-center rounded-md bg-rose-500 text-white hover:bg-rose-600 transition" aria-label="Discard header changes">
+                        <svg class="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 5 15 15M15 5 5 15"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div class="bg-white p-6 border-t no-print">
+            <div id="livePreview" class="px-8 pt-2 text-slate-400 text-sm italic h-6 overflow-hidden"></div>
+            <div id="content" contenteditable="true" class="p-8 flex-grow prose max-w-none focus:outline-none font-sans text-slate-800">
+                <p id="placeholder" class="text-slate-300 italic no-print">Tap to start prescription...</p>
+            </div>
+            <div class="bg-white px-6 py-5 border-t border-slate-100 no-print">
                 <div class="w-full max-w-3xl mx-auto flex flex-col items-center gap-3">
-                    <div id="countdownBadge" class="hidden text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-full"></div>
+                    <div id="countdownBadge" class="hidden text-xs font-semibold text-amber-600 bg-amber-100 px-2 py-1 rounded-full"></div>
                     <div class="w-full">
-                        <canvas id="waveform" class="w-full h-8 rounded-full bg-black/5 opacity-0 transition-opacity duration-500"></canvas>
+                        <canvas id="waveform" class="w-full h-10 rounded-full bg-slate-100 border border-slate-200 opacity-0 transition-opacity duration-500"></canvas>
                     </div>
                     <div class="relative flex flex-col items-center gap-1">
-                        <button id="recordFab" onclick="handleRecordAction()" class="w-16 h-16 rounded-full bg-[#1769AA] text-white shadow-lg flex items-center justify-center transition-all active:scale-95">
-                            <svg id="recordIcon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z"/><path d="M7 11a5 5 0 0 0 10 0h-1.5a3.5 3.5 0 0 1-7 0H7Z"/><path d="M12 17v3m0 0h-3m3 0h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                            </svg>
-                        </button>
+                        <div class="flex items-center gap-4">
+                            <button id="recordFab" onclick="handleRecordAction()" class="w-20 h-20 rounded-full bg-rose-600 text-white shadow-xl border-4 border-white flex items-center justify-center transition-all active:scale-95">
+                                <svg id="recordIcon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z"/><path d="M7 11a5 5 0 0 0 10 0h-1.5a3.5 3.5 0 0 1-7 0H7Z"/><path d="M12 17v3m0 0h-3m3 0h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                            <button id="stopButton" onclick="handleStopAction()" class="hidden w-20 h-20 rounded-full bg-slate-800 text-white shadow-xl border-4 border-white flex items-center justify-center transition-all active:scale-95">
+                                <svg id="stopIcon" class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                                <span class="sr-only">Stop</span>
+                            </button>
+                        </div>
                     </div>
-                    <p id="recordLabel" class="text-sm font-semibold text-[#4A5568]">Tap to start prescription</p>
-                    <p id="status" class="text-center text-xs text-gray-500 font-bold min-h-[1.5rem] whitespace-pre-line px-4">READY</p>
+                    <p id="recordLabel" class="text-sm font-semibold text-slate-700">Tap to start prescription</p>
+                    <p id="status" class="text-center text-xs text-slate-500 font-bold min-h-[1.5rem] whitespace-pre-line px-4">READY</p>
                 </div>
                 <div class="w-full grid grid-cols-1 md:grid-cols-3 items-center mt-4 gap-3">
-                    <div class="flex justify-start md:col-span-1 gap-2 items-center">
+                    <div class="flex justify-start md:col-span-1 gap-3 items-center">
                         <div class="relative">
-                            <button id="fontButton" onclick="toggleFontMenu()" class="bg-white border border-slate-200 rounded-md px-2 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-200 hover:border-blue-200">
+                            <button id="fontButton" onclick="toggleFontMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-300">
                                 <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.89 3.31.877 2.42 2.42a1.724 1.724 0 001.065 2.572c1.757.426 1.757 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.89 1.543-.877 3.31-2.42 2.42a1.724 1.724 0 00-2.572 1.065c-.427 1.757-2.925 1.757-3.351 0a1.724 1.724 0 00-2.572-1.066c-1.543.89-3.31-.876-2.42-2.42a1.724 1.724 0 00-1.065-2.572c-1.757-.427-1.757-2.925 0-3.351a1.724 1.724 0 001.066-2.572c-.89-1.543.877-3.31 2.42-2.42.996.574 2.273.096 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.75a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5z"/></svg>
                             </button>
-                            <div id="fontMenu" class="hidden absolute left-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50 p-3 space-y-3">
+                            <div id="fontMenu" class="hidden absolute left-0 bottom-full mb-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50 p-3 space-y-3">
                                 <div>
                                     <label class="block text-[11px] text-slate-600 mb-1">Font family</label>
-                                    <select id="fontFamilySelect" class="w-full border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                                    <select id="fontFamilySelect" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                         <option value="'Inter', sans-serif">Sans (Inter)</option>
                                         <option value="Georgia, serif">Serif (Georgia)</option>
                                         <option value="'Source Sans Pro', sans-serif">Sans (Source Sans)</option>
@@ -106,28 +155,24 @@
                                 </div>
                                 <div>
                                     <label class="block text-[11px] text-slate-600 mb-1">Font size</label>
-                                    <select id="fontSizeSelect" class="w-full border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200">
+                                    <select id="fontSizeSelect" class="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                         <option value="14px" selected>14 px</option>
                                         <option value="16px">16 px</option>
                                         <option value="18px">18 px</option>
                                         <option value="20px">20 px</option>
                                     </select>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <input id="reviewToggle" type="checkbox" class="h-3.5 w-3.5" checked onchange="toggleReviewSetting()">
-                                    <label for="reviewToggle" class="text-[11px] text-slate-600">Enable AI review (auto)</label>
-                                </div>
                                 <div class="flex justify-end">
-                                    <button class="text-blue-700 text-xs font-semibold" onclick="applyFontSettings()">Apply</button>
+                                    <button class="text-blue-800 text-xs font-semibold" onclick="applyFontSettings()">Apply</button>
                                 </div>
                             </div>
                         </div>
                         <div class="relative">
-                        <button id="modeButton" onclick="toggleModeMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-200 hover:border-blue-200">
+                        <button id="modeButton" onclick="toggleModeMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-300">
                             <span id="modeLabel" class="flex items-center gap-1 whitespace-nowrap">🔍 Offline (High Accuracy)</span>
                                 <span class="text-slate-500 text-xs">⌄</span>
                             </button>
-                            <div id="modeMenu" class="hidden absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50">
+                            <div id="modeMenu" class="hidden absolute right-0 bottom-full mb-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg text-xs font-medium text-slate-800 z-50">
                                 <div class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-slate-50" onclick="selectMode('live')">
                                     <span class="flex items-center gap-2 whitespace-nowrap">⚡ Live (Faster)</span>
                                     <span id="checkLive" class="text-blue-600 text-xs">✓</span>
@@ -141,11 +186,11 @@
                         </div>
                     </div>
                     <div class="flex justify-center">
-                        <div class="text-[#1769AA] font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
+                        <div class="text-blue-900 font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
                     </div>
-                    <div class="flex justify-end items-center gap-2">
-                        <button onclick="window.location.reload()" class="px-3 py-1 text-gray-500 text-xs">Clear</button>
-                        <button onclick="handlePrint()" class="bg-gray-900 text-white px-4 py-2 rounded text-sm font-bold">Print</button>
+                    <div class="flex justify-end items-center gap-3">
+                        <button onclick="window.location.reload()" class="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg text-xs font-semibold">Clear</button>
+                        <button onclick="handlePrint()" class="bg-blue-800 hover:bg-blue-900 text-white px-5 py-2 rounded-lg text-sm font-semibold shadow transition">Print</button>
                     </div>
                 </div>
             </div>
@@ -154,41 +199,41 @@
 
     <!-- SETTINGS & MACRO MODALS (Standard) -->
     <div id="settingsModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print">
-        <div class="bg-white rounded p-6 w-full max-w-lg shadow-xl">
-            <h2 class="font-bold mb-4">Settings</h2>
-            <input id="in_name" placeholder="Name" class="w-full border p-2 mb-2 rounded">
-            <input id="in_qual" placeholder="Qualifications" class="w-full border p-2 mb-2 rounded">
-            <input id="in_reg" placeholder="Reg No" class="w-full border p-2 mb-2 rounded">
-            <textarea id="in_clinic" placeholder="Clinic Address" class="w-full border p-2 mb-2 rounded"></textarea>
-            <input id="in_keywords" placeholder="Keywords (Brand names)" class="w-full border p-2 mb-2 bg-yellow-50 rounded">
-            <div class="flex justify-end gap-2">
-                <button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="px-4 py-2 text-gray-600">Cancel</button>
-                <button onclick="saveSettings()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
+        <div class="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl border border-slate-200">
+            <h2 class="font-bold text-blue-900 mb-4 tracking-tight">Settings</h2>
+            <input id="in_name" placeholder="Name" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <input id="in_qual" placeholder="Qualifications" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <input id="in_reg" placeholder="Reg No" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <textarea id="in_clinic" placeholder="Clinic Address" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+            <input id="in_keywords" placeholder="Keywords (Brand names)" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <div class="flex justify-end gap-3 mt-4">
+                <button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button onclick="saveSettings()" class="bg-blue-800 hover:bg-blue-900 text-white px-5 py-2 rounded-lg font-semibold shadow transition">Save</button>
             </div>
         </div>
     </div>
 
     <div id="macroModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print">
-        <div class="bg-white rounded p-6 w-full max-w-2xl shadow-xl">
-            <h2 class="font-bold mb-1">Macros</h2>
-            <p class="text-xs text-gray-500 mb-3">Speak the trigger phrase during dictation to insert the macro (e.g., “apply fever protocol”).</p>
-            <input id="macroTrigger" placeholder="Trigger" class="w-full border p-2 mb-2 rounded">
-            <textarea id="macroExpansion" placeholder="Expansion..." class="w-full border p-2 mb-2 rounded h-40"></textarea>
-            <div class="flex justify-end gap-2">
-                <button onclick="document.getElementById('macroModal').classList.add('hidden')" class="px-4 py-2 text-gray-600">Close</button>
-                <button onclick="saveMacro()" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
+        <div class="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl border border-slate-200">
+            <h2 class="font-bold text-blue-900 mb-1 tracking-tight">Macros</h2>
+            <p class="text-xs text-slate-600 mb-3">Speak the trigger phrase during dictation to insert the macro (e.g., “apply fever protocol”).</p>
+            <input id="macroTrigger" placeholder="Trigger" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <textarea id="macroExpansion" placeholder="Expansion..." class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md h-40 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+            <div class="flex justify-end gap-3">
+                <button onclick="document.getElementById('macroModal').classList.add('hidden')" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Close</button>
+                <button onclick="saveMacro()" class="bg-blue-800 hover:bg-blue-900 text-white px-5 py-2 rounded-lg font-semibold shadow transition">Save</button>
             </div>
-            <div id="macroList" class="mt-4 pt-4 border-t text-xs h-48 overflow-y-auto"></div>
+            <div id="macroList" class="mt-4 pt-4 border-t border-slate-200 text-xs h-48 overflow-y-auto"></div>
         </div>
     </div>
 
     <div id="consentModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 no-print">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h2 class="text-lg font-bold text-blue-900 mb-2">Confirm &amp; Print</h2>
-            <p class="text-sm text-gray-700 mb-4">I understand the prescriptions are generated by Clinova Rx and I accept full responsibility for clinical decisions and patient risk.</p>
-            <div class="flex justify-end gap-2">
-                <button onclick="closeConsent()" class="px-4 py-2 text-gray-600 rounded">Cancel</button>
-                <button onclick="confirmConsent()" class="px-4 py-2 bg-blue-600 text-white rounded">Agree &amp; Print</button>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200">
+            <h2 class="text-lg font-bold text-blue-900 mb-2 tracking-tight">Confirm &amp; Print</h2>
+            <p class="text-sm text-slate-700 mb-4">I understand the prescriptions are generated by Clinova Rx and I accept full responsibility for clinical decisions and patient risk.</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeConsent()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+                <button onclick="confirmConsent()" class="px-4 py-2 bg-blue-800 hover:bg-blue-900 text-white rounded-lg font-semibold shadow">Agree &amp; Print</button>
             </div>
         </div>
     </div>
@@ -207,20 +252,24 @@
         const API_BASE = getApiBase();
         const socket = API_BASE ? io(API_BASE) : io();
         
-        let mediaRecorder, isRecording = false, transcriptBuffer = "", startTime = 0, timerInterval;
+        let mediaRecorder, isRecording = false, transcriptBuffer = "", timerInterval;
         let backupAudioChunks = [];
         let recordedMimeType = ''; // To store the browser's native mime type
         let audioCtx, sourceNode, processorNode, analyserNode, waveformAnim;
         let pcmQueue = [];
-        let recordState = 'idle'; // idle | recording | processing
+        let recordState = 'idle'; // idle | recording | paused | processing
         let elapsedSeconds = 0;
-        const MAX_SECONDS = 300; // 5 minutes
-        const GRACE_SECONDS = 15; // prevent accidental stops
+        const MIN_RECORD_SECONDS = 5; // discard shorter clips
         let transcriptionMode = 'offline'; // 'live' or 'offline'
         let modeLocked = false;
         let fontMenuOpen = false;
         let reviewEnabled = true;
         let pendingHtml = "";
+        let savedHeaderHtml = "";
+        let headerDirty = false;
+        let headerStatusTimeout;
+        let currentFontFamily = "'Inter', sans-serif";
+        let currentFontSize = "14px";
 
         // --- AUTH ---
         window.onload = initApp;
@@ -273,12 +322,27 @@
             window.location.href = '/';
         }
        async function initApp() {
+            // load client preferences before showing UI
+            const savedReview = localStorage.getItem('aiReviewEnabled');
+            if (savedReview !== null) {
+                setReviewEnabled(savedReview === 'true', true);
+            }
+            const savedMode = localStorage.getItem('transcriptionMode');
+            if (savedMode === 'live' || savedMode === 'offline') {
+                setMode(savedMode, true);
+            }
+            setMode(transcriptionMode, true);
             try {
                 const res = await fetch('/api/me');
                 if (res.status === 401) throw new Error("Unauthorized");
                 const data = await res.json();
                 document.getElementById('creditDisplay').innerText = data.credits;
-                document.getElementById('docHeader').innerHTML = data.header_html || "<h1>Dr. Name</h1><p>Edit Header...</p>";
+                const headerEl = document.getElementById('docHeader');
+                if (headerEl) {
+                    headerEl.innerHTML = data.header_html || "<h1>Dr. Name</h1><p>Edit Header...</p>";
+                    setHeaderBaseline(headerEl.innerHTML);
+                    applyCurrentFontToHeader();
+                }
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('appScreen').classList.remove('hidden');
                 loadMacros();
@@ -309,19 +373,60 @@
             } catch (e) {
                 updateStatus("Formatting failed", "text-red-500");
             } finally {
-                setRecordState('idle');
+                setRecordState('done');
                 modeLocked = false;
+                setTimeout(() => setRecordState('idle'), 1200);
             }
         }
-        async function saveHeader() {
+        function setHeaderStatus(text, colorClass = "text-emerald-600") {
             const statusEl = document.getElementById('headerStatus');
+            if (!statusEl) return;
+            statusEl.innerText = text;
+            statusEl.className = `text-xs font-semibold h-4 ${colorClass}`;
+            if (headerStatusTimeout) clearTimeout(headerStatusTimeout);
+            if (text) headerStatusTimeout = setTimeout(() => { statusEl.innerText = ""; }, 2000);
+        }
+
+        function toggleHeaderActions(show) {
+            const actions = document.getElementById('headerActions');
+            if (!actions) return;
+            actions.classList.toggle('hidden', !show);
+        }
+
+        function setHeaderBaseline(html) {
+            savedHeaderHtml = html || "";
+            headerDirty = false;
+            toggleHeaderActions(false);
+        }
+
+        function markHeaderDirty() {
+            const el = document.getElementById('docHeader');
+            if (!el) return;
+            const isDirty = el.innerHTML.trim() !== (savedHeaderHtml || "").trim();
+            headerDirty = isDirty;
+            toggleHeaderActions(isDirty);
+        }
+
+        function discardHeaderChanges() {
+            const el = document.getElementById('docHeader');
+            if (!el) return;
+            el.innerHTML = savedHeaderHtml || "";
+            headerDirty = false;
+            toggleHeaderActions(false);
+            setHeaderStatus("Changes discarded", "text-slate-500");
+        }
+
+        async function saveHeader() {
+            const docHeaderEl = document.getElementById('docHeader');
+            if (!docHeaderEl) return;
+            const html = docHeaderEl.innerHTML;
             try {
-                await fetch('/api/header', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ html: document.getElementById('docHeader').innerHTML }) });
-                statusEl.innerText = "Header saved";
-                setTimeout(() => { statusEl.innerText = ""; }, 2000);
+                const res = await fetch('/api/header', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ html }) });
+                if (!res.ok) throw new Error("Save failed");
+                setHeaderStatus("Header saved", "text-emerald-600");
+                setHeaderBaseline(html);
             } catch (e) {
-                statusEl.innerText = "Save failed";
-                setTimeout(() => { statusEl.innerText = ""; }, 2000);
+                setHeaderStatus("Save failed", "text-rose-600");
             }
         }
 
@@ -353,7 +458,7 @@
             statusEl.className = `text-center text-xs font-bold mb-4 min-h-[1.5rem] whitespace-pre-line px-4 ${colorClass || 'text-gray-500'}`;
         }
 
-        function setMode(mode) {
+        function setMode(mode, skipPersist = false) {
             transcriptionMode = mode;
             const label = document.getElementById('modeLabel');
             const checkLive = document.getElementById('checkLive');
@@ -370,6 +475,7 @@
                 checkLive.classList.add('hidden');
             }
             closeModeMenu();
+            if (!skipPersist) localStorage.setItem('transcriptionMode', transcriptionMode);
         }
 
         function toggleModeMenu() {
@@ -391,8 +497,12 @@
         function toggleFontMenu() {
             const menu = document.getElementById('fontMenu');
             fontMenuOpen = !fontMenuOpen;
-            if (fontMenuOpen) menu.classList.remove('hidden');
-            else menu.classList.add('hidden');
+            if (fontMenuOpen) {
+                syncFontControls();
+                menu.classList.remove('hidden');
+            } else {
+                menu.classList.add('hidden');
+            }
         }
 
         function closeFontMenu() {
@@ -403,9 +513,33 @@
             }
         }
 
+        const normalizeFont = (val) => (val || "").toLowerCase().replace(/["']/g, '').replace(/\s+/g, '');
+
+        function syncFontControls() {
+            const content = document.getElementById('content');
+            if (!content) return;
+            const style = window.getComputedStyle(content);
+            currentFontFamily = style.fontFamily;
+            currentFontSize = style.fontSize;
+            const familySelect = document.getElementById('fontFamilySelect');
+            const sizeSelect = document.getElementById('fontSizeSelect');
+            if (familySelect) {
+                const normalizedFamily = normalizeFont(currentFontFamily);
+                const match = Array.from(familySelect.options).find(opt => normalizeFont(opt.value) === normalizedFamily);
+                familySelect.value = match ? match.value : familySelect.options[0].value;
+            }
+            if (sizeSelect) {
+                const matchSize = Array.from(sizeSelect.options).find(opt => opt.value === currentFontSize);
+                sizeSelect.value = matchSize ? matchSize.value : sizeSelect.options[0].value;
+            }
+            applyCurrentFontToHeader(style);
+        }
+
         function applyFontSettings() {
             const family = document.getElementById('fontFamilySelect').value;
             const size = document.getElementById('fontSizeSelect').value;
+            currentFontFamily = family;
+            currentFontSize = size;
             document.getElementById('content').style.fontFamily = family;
             document.getElementById('content').style.fontSize = size;
             document.getElementById('docHeader').style.fontFamily = family;
@@ -413,37 +547,143 @@
             closeFontMenu();
         }
 
-        function toggleReviewSetting() {
+        function applySelectedFontDefaults() {
+            const familySelect = document.getElementById('fontFamilySelect');
+            const sizeSelect = document.getElementById('fontSizeSelect');
+            if (!familySelect || !sizeSelect) return;
+            currentFontFamily = familySelect.value;
+            currentFontSize = sizeSelect.value;
+            const content = document.getElementById('content');
+            const header = document.getElementById('docHeader');
+            if (content) {
+                content.style.fontFamily = currentFontFamily;
+                content.style.fontSize = currentFontSize;
+            }
+            if (header) {
+                header.style.fontFamily = currentFontFamily;
+                header.style.fontSize = currentFontSize;
+            }
+        }
+
+        function applyCurrentFontToHeader(styleObj) {
+            const content = document.getElementById('content');
+            const header = document.getElementById('docHeader');
+            if (!content || !header) return;
+            const style = styleObj || window.getComputedStyle(content);
+            header.style.fontFamily = style.fontFamily;
+            header.style.fontSize = style.fontSize;
+            header.style.lineHeight = style.lineHeight;
+        }
+
+        function setReviewEnabled(value, skipPersist = false) {
+            reviewEnabled = value;
             const toggle = document.getElementById('reviewToggle');
+            if (toggle) toggle.checked = reviewEnabled;
+            const knob = document.getElementById('aiToggleKnob');
+            const label = document.getElementById('aiToggleLabel');
+            const wrap = document.getElementById('aiReviewToggle');
+            const track = document.getElementById('aiToggleTrack');
+            if (knob) {
+                knob.style.transform = reviewEnabled ? 'translateX(24px)' : 'translateX(0px)';
+                knob.className = `absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200`;
+            }
+            if (label) {
+                label.innerText = reviewEnabled ? "Enabled" : "Disabled";
+                label.className = `text-sm font-semibold ${reviewEnabled ? 'text-blue-900' : 'text-slate-500'}`;
+            }
+            if (wrap) {
+                wrap.classList.toggle('ring-2', reviewEnabled);
+                wrap.classList.toggle('ring-green-200', reviewEnabled);
+                wrap.classList.toggle('bg-green-50', reviewEnabled);
+            }
+            if (track) track.className = `w-12 h-6 rounded-full transition relative overflow-hidden ${reviewEnabled ? 'bg-green-500' : 'bg-slate-200'}`;
+            if (!skipPersist) localStorage.setItem('aiReviewEnabled', reviewEnabled ? 'true' : 'false');
+        }
+
+        function toggleReviewSetting() {
             if (isRecording || recordState === 'processing') {
-                toggle.checked = reviewEnabled;
+                const toggle = document.getElementById('reviewToggle');
+                if (toggle) toggle.checked = reviewEnabled;
                 return;
             }
-            reviewEnabled = toggle.checked;
+            setReviewEnabled(!reviewEnabled);
         }
+
+        function handleAiToggleClick() {
+            if (isRecording || recordState === 'processing') return;
+            setReviewEnabled(!reviewEnabled);
+        }
+
+        const setFabIcon = (mode) => {
+            const icon = document.getElementById('recordIcon');
+            if (!icon) return;
+            icon.setAttribute('viewBox', '0 0 24 24');
+            const baseClass = "w-7 h-7";
+            const icons = {
+                mic: `<path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z"/><path d="M7 11a5 5 0 0 0 10 0h-1.5a3.5 3.5 0 0 1-7 0H7Z"/><path d="M12 17v3m0 0h-3m3 0h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
+                pause: `<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>`,
+                play: `<path d="M8 5v14l11-7z"/>`,
+                check: `<path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+            };
+            icon.className = baseClass;
+            if (mode === 'spinner') {
+                icon.className = "w-7 h-7 text-white animate-pulse";
+                icon.innerHTML = `<svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M7 2h10a1 1 0 0 1 1 1v1.2a3 3 0 0 1-.88 2.12L14 9l3.12 2.68A3 3 0 0 1 18 13.8V15a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-1.2a3 3 0 0 1 .88-2.12L10 9 6.88 6.32A3 3 0 0 1 6 4.2V3a1 1 0 0 1 1-1Z"/>
+                    <path d="M10 3h4" />
+                    <path d="M10 21h4" />
+                </svg>`;
+            } else if (mode === 'mic') {
+                icon.innerHTML = icons.mic;
+            } else if (mode === 'pause') {
+                icon.innerHTML = icons.pause;
+            } else if (mode === 'play') {
+                icon.innerHTML = icons.play;
+            } else if (mode === 'check') {
+                icon.innerHTML = icons.check;
+            } else {
+                icon.innerHTML = icons.mic;
+            }
+        };
 
         function setRecordState(state) {
             recordState = state;
             const fab = document.getElementById('recordFab');
-            const icon = document.getElementById('recordIcon');
             const label = document.getElementById('recordLabel');
             const wave = document.getElementById('waveform');
+            const stopBtn = document.getElementById('stopButton');
 
             if (state === 'idle') {
-                fab.className = "w-16 h-16 rounded-full bg-[#1769AA] text-white shadow-lg flex items-center justify-center transition-all active:scale-95";
-                icon.className = "w-7 h-7";
+                fab.className = "w-16 h-16 rounded-full bg-red-600 text-white shadow-lg flex items-center justify-center transition-all active:scale-95";
+                setFabIcon('mic');
                 label.innerText = "Tap to start prescription";
                 wave.classList.add('opacity-0');
+                if (stopBtn) stopBtn.classList.add('hidden');
+                document.getElementById('timerDisplay').innerText = "00:00";
             } else if (state === 'recording') {
-                fab.className = "w-16 h-16 rounded-full bg-red-600 text-white shadow-lg flex items-center justify-center transition-all scale-105";
-                icon.className = "w-5 h-5";
-                label.innerText = "Recording...";
+                fab.className = "w-16 h-16 rounded-full bg-red-600 text-white shadow-lg flex items-center justify-center transition-all scale-105 animate-pulse";
+                setFabIcon('pause');
+                label.innerText = "Recording... Tap to pause";
                 wave.classList.remove('opacity-0');
+                if (stopBtn) stopBtn.classList.remove('hidden');
+            } else if (state === 'paused') {
+                fab.className = "w-16 h-16 rounded-full bg-amber-500 text-white shadow-lg flex items-center justify-center transition-all";
+                setFabIcon('play');
+                label.innerText = "Paused. Tap to resume";
+                wave.classList.add('opacity-0');
+                if (stopBtn) stopBtn.classList.remove('hidden');
             } else if (state === 'processing') {
-                fab.className = "w-16 h-16 rounded-full bg-gray-500 text-white shadow-lg flex items-center justify-center transition-all animate-pulse";
-                icon.className = "w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin";
+                fab.className = "w-16 h-16 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center transition-all animate-pulse";
+                setFabIcon('spinner');
                 label.innerText = "Processing...";
                 wave.classList.add('opacity-0');
+                if (stopBtn) stopBtn.classList.add('hidden');
+            } else if (state === 'done') {
+                fab.className = "w-16 h-16 rounded-full bg-green-600 text-white shadow-lg flex items-center justify-center transition-all";
+                setFabIcon('check');
+                label.innerText = "Done";
+                wave.classList.add('opacity-0');
+                if (stopBtn) stopBtn.classList.add('hidden');
             }
         }
 
@@ -452,10 +692,8 @@
             const ctx = canvas.getContext('2d');
             canvas.width = canvas.clientWidth;
             canvas.height = canvas.clientHeight;
-            analyserNode.fftSize = 128;
-            const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
-
-            const draw = () => {
+            if (!analyserNode) return;
+            const drawLive = () => {
                 analyserNode.getByteTimeDomainData(dataArray);
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = "rgba(23,105,170,0.08)";
@@ -473,10 +711,13 @@
                     x += sliceWidth;
                 }
                 ctx.stroke();
-                waveformAnim = requestAnimationFrame(draw);
+                waveformAnim = requestAnimationFrame(drawLive);
             };
             if (waveformAnim) cancelAnimationFrame(waveformAnim);
-            waveformAnim = requestAnimationFrame(draw);
+            analyserNode.fftSize = 128;
+            var dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+            waveformAnim = requestAnimationFrame(drawLive);
+            canvas.classList.remove('opacity-0');
         }
 
         function stopWaveform() {
@@ -513,8 +754,9 @@
                 } else {
                     document.getElementById('content').innerHTML = data.html;
                     updateStatus("DONE", "text-green-600");
-                    setRecordState('idle');
+                    setRecordState('done');
                     modeLocked = false;
+                    setTimeout(() => setRecordState('idle'), 1200);
                 }
             } else {
                 alert(data.error);
@@ -529,7 +771,7 @@
             if (isRecording || recordState === 'processing') return;
             transcriptBuffer = "";
             backupAudioChunks = [];
-            startTime = Date.now();
+            elapsedSeconds = 0;
             document.getElementById('timerDisplay').innerText = "00:00";
             
             try {
@@ -566,6 +808,13 @@
                             socket.emit('audio-stream', { type: 'pcm', data: merged.buffer });
                         }
                     };
+                } else {
+                    // Offline: still create analyser for waveform visualization
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    sourceNode = audioCtx.createMediaStreamSource(stream);
+                    analyserNode = audioCtx.createAnalyser();
+                    analyserNode.fftSize = 512;
+                    sourceNode.connect(analyserNode);
                 }
 
                 // Always capture backup/primary recording for final upload
@@ -580,9 +829,8 @@
                 setRecordState('recording');
                 updateStatus(transcriptionMode === 'live' ? "LISTENING..." : "RECORDING (offline high accuracy)", "text-red-500");
                 modeLocked = true;
-                startTimer();
-                if (transcriptionMode === 'live') startWaveform();
-                else document.getElementById('waveform').classList.add('opacity-0');
+                startTimer(true);
+                startWaveform();
 
             } catch (e) { 
                 updateStatus("Mic permission denied", "text-red-500");
@@ -591,49 +839,76 @@
             }
         }
 
-        function handleRecordAction() {
-            if (recordState === 'idle') startRecording();
-            else if (recordState === 'recording') {
-                if (elapsedSeconds < GRACE_SECONDS) {
-                    updateStatus(`Keep talking… (${GRACE_SECONDS - elapsedSeconds}s min)`, "text-amber-600");
-                    return;
-                }
-                stopRecording(false);
-            }
+        function pauseRecording() {
+            if (recordState !== 'recording') return;
+            isRecording = false;
+            clearInterval(timerInterval);
+            try { if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.pause(); } catch (_) {}
+            try { if (audioCtx) audioCtx.suspend(); } catch (_) {}
+            setRecordState('paused');
+            stopWaveform();
+            updateStatus("Paused", "text-amber-600");
         }
 
-        function stopRecording(autoStop = false) {
-            if (!isRecording) return;
+        function resumeRecording() {
+            if (recordState !== 'paused') return;
+            isRecording = true;
+            try { if (mediaRecorder && mediaRecorder.state === 'paused') mediaRecorder.resume(); } catch (_) {}
+            try { if (audioCtx) audioCtx.resume(); } catch (_) {}
+            setRecordState('recording');
+            startTimer(false);
+            startWaveform();
+            updateStatus(transcriptionMode === 'live' ? "LISTENING..." : "RECORDING (offline high accuracy)", "text-red-500");
+        }
+
+        function handleRecordAction() {
+            if (recordState === 'idle' || recordState === 'done') startRecording();
+            else if (recordState === 'recording') pauseRecording();
+            else if (recordState === 'paused') resumeRecording();
+        }
+
+        function handleStopAction() {
+            stopRecording();
+        }
+
+        function stopRecording() {
+            if (recordState === 'idle' || recordState === 'processing') return;
             isRecording = false;
             clearInterval(timerInterval);
             setRecordState('processing');
             document.getElementById('countdownBadge').classList.add('hidden');
+
             if (transcriptionMode === 'live') {
                 flushPcmQueue();
                 if (processorNode) { processorNode.disconnect(); processorNode.onaudioprocess = null; processorNode = null; }
-                if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
-                if (audioCtx) { audioCtx.close(); audioCtx = null; }
                 pcmQueue = [];
-                stopWaveform();
             }
 
-            if(mediaRecorder) mediaRecorder.stop();
+            if (sourceNode) { try { sourceNode.disconnect(); } catch (_) {} sourceNode = null; }
+            if (analyserNode) { analyserNode = null; }
+            if (audioCtx) { try { audioCtx.close(); } catch (_) {} audioCtx = null; }
+            stopWaveform();
+
+            if (mediaRecorder) {
+                try { mediaRecorder.stop(); } catch (_) {}
+            }
             if(mediaRecorder && mediaRecorder.stream) mediaRecorder.stream.getTracks().forEach(t => t.stop());
 
-            const duration = Date.now() - startTime;
-            if (!autoStop && duration < 2000) { 
-                updateStatus("Cancelled (<2s)", "text-gray-500");
+            const recordedSeconds = elapsedSeconds;
+            if (recordedSeconds < MIN_RECORD_SECONDS) { 
+                updateStatus("Discarded (<5s)", "text-gray-500");
                 setRecordState('idle');
                 modeLocked = false;
+                backupAudioChunks = [];
+                transcriptBuffer = "";
                 return;
             }
 
             if (transcriptionMode === 'live') {
                 updateStatus("FORMATTING...", "text-blue-600");
                 const cleanContext = document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML;
-                
-            const pendingPreview = document.getElementById('livePreview').innerText;
-            const fullText = (transcriptBuffer + " " + pendingPreview).trim();
+                const pendingPreview = document.getElementById('livePreview').innerText;
+                const fullText = (transcriptBuffer + " " + pendingPreview).trim();
 
                 setTimeout(() => {
                     socket.emit('finalize-prescription', { fullTranscript: fullText, context: cleanContext });
@@ -676,6 +951,9 @@
                 handleResult(data);
             } catch (e) {
                 alert("Backup Upload Failed: " + e.message);
+                updateStatus("Backup upload failed", "text-red-500");
+                setRecordState('idle');
+                modeLocked = false;
             }
         }
 
@@ -692,26 +970,20 @@
             window.print();
         }
 
-        function startTimer() {
+        function startTimer(reset = false) {
             const timerEl = document.getElementById('timerDisplay');
             const badge = document.getElementById('countdownBadge');
-            elapsedSeconds = 0;
+            if (reset) {
+                elapsedSeconds = 0;
+                timerEl.innerText = "00:00";
+            }
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 elapsedSeconds++;
-                const remaining = MAX_SECONDS - elapsedSeconds;
                 const m = Math.floor(elapsedSeconds / 60);
                 const s = elapsedSeconds % 60;
                 timerEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-                if (remaining <= 30 && remaining >= 0) {
-                    badge.classList.remove('hidden');
-                    badge.innerText = `Stopping in ${remaining}s`;
-                } else {
-                    badge.classList.add('hidden');
-                }
-                if (elapsedSeconds >= MAX_SECONDS) {
-                    stopRecording(true);
-                }
+                badge.classList.add('hidden');
             }, 1000);
         }
 
@@ -771,6 +1043,16 @@
             loadMacros();
         }
 
+        const docHeaderEl = document.getElementById('docHeader');
+        if (docHeaderEl) {
+            setHeaderBaseline(docHeaderEl.innerHTML);
+            docHeaderEl.addEventListener('input', markHeaderDirty);
+        }
+
+        applySelectedFontDefaults();
+        syncFontControls();
+        applyCurrentFontToHeader();
+        setReviewEnabled(reviewEnabled);
         setRecordState('idle');
     </script>
 </body>
