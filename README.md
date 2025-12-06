@@ -69,6 +69,7 @@ SUPABASE_URL=<your supabase url>
 SUPABASE_SERVICE_ROLE_KEY=<service role key>
 SUPABASE_DB_URL=<postgres connection string for sessions>
 SESSION_SECRET=<random string>
+S3_CLEANUP_MAX_AGE_HOURS=24 # optional; S3 cleanup runs every 3 hours
 ```
 
 Existing SQLite file `smartrx.db` is no longer used.

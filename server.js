@@ -20,7 +20,7 @@ import crypto from 'crypto';
 import sanitizeHtml from 'sanitize-html';
 import OpenAI from 'openai';
 import { toFile } from 'openai/uploads';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -61,6 +61,7 @@ const S3_BUCKET = process.env.S3_BUCKET;
 const TRANSCRIPTION_PROVIDER = (process.env.TRANSCRIPTION_PROVIDER || 'deepgram').toLowerCase();
 const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
 const SUPABASE_DB_URL = process.env.SUPABASE_DB_URL;
+const S3_CLEANUP_MAX_AGE_HOURS = Number(process.env.S3_CLEANUP_MAX_AGE_HOURS || 24);
 
 // --- SESSION CONFIG ---
 if (!SUPABASE_DB_URL) throw new Error('SUPABASE_DB_URL env missing for session storage');
@@ -142,6 +143,46 @@ const streamToBuffer = async (stream) => {
     const chunks = [];
     for await (const chunk of stream) chunks.push(chunk);
     return Buffer.concat(chunks);
+};
+const scheduleS3Cleanup = () => {
+    if (!S3_BUCKET || !S3_REGION || !S3_CLEANUP_MAX_AGE_HOURS) return;
+    const intervalMs = 3 * 60 * 60 * 1000; // every 3 hours
+    const run = async () => {
+        const cutoff = Date.now() - S3_CLEANUP_MAX_AGE_HOURS * 60 * 60 * 1000;
+        let deleted = 0;
+        let checked = 0;
+        let token;
+        try {
+            do {
+                const resp = await s3.send(new ListObjectsV2Command({
+                    Bucket: S3_BUCKET,
+                    Prefix: 'uploads/',
+                    ContinuationToken: token
+                }));
+                const objs = resp.Contents || [];
+                const stale = objs
+                    .filter(o => o.LastModified && o.LastModified.getTime() < cutoff)
+                    .map(o => ({ Key: o.Key }));
+                checked += objs.length;
+                token = resp.IsTruncated ? resp.NextContinuationToken : undefined;
+                if (stale.length) {
+                    const del = await s3.send(new DeleteObjectsCommand({
+                        Bucket: S3_BUCKET,
+                        Delete: { Objects: stale, Quiet: true }
+                    }));
+                    deleted += del?.Deleted?.length || 0;
+                }
+            } while (token);
+            if (checked) {
+                console.log(`🧹 S3 cleanup: checked ${checked}, deleted ${deleted}, maxAgeHrs=${S3_CLEANUP_MAX_AGE_HOURS}`);
+            }
+        } catch (err) {
+            console.error('S3 cleanup error:', err);
+        }
+    };
+    // kick off immediately, then schedule
+    run();
+    setInterval(run, intervalMs);
 };
 
 io.on('connection', (socket) => {
@@ -643,3 +684,4 @@ app.post('/api/process-backup', upload.single('audio'), async (req, res) => {
 
 const PORT = 3000;
 httpServer.listen(PORT, () => console.log(`\n🚀 Clinova Rx running on port ${PORT}\n`));
+scheduleS3Cleanup();
