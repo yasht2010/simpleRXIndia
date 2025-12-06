@@ -13,6 +13,8 @@
             body { background: white !important; font-size: 12pt; margin: 0; }
             .print-area { border: none !important; box-shadow: none !important; padding: 0 !important; }
         }
+        #content table { width: 100%; max-width: 100%; table-layout: fixed; }
+        #content th, #content td { word-break: break-word; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-base leading-relaxed">
@@ -144,7 +146,7 @@
                 </div>
             </div>
             <div id="livePreview" class="px-4 sm:px-8 pt-2 text-slate-400 text-sm italic h-6 overflow-hidden"></div>
-            <div id="content" contenteditable="true" class="p-4 sm:p-6 md:p-8 flex-grow prose max-w-none focus:outline-none font-sans text-slate-800">
+            <div id="content" contenteditable="true" class="p-4 sm:p-6 md:p-8 flex-grow prose max-w-none focus:outline-none font-sans text-slate-800 overflow-x-auto">
                 <p id="placeholder" class="text-slate-300 italic no-print">Tap to start prescription...</p>
             </div>
             <div class="bg-white px-4 sm:px-6 py-4 sm:py-5 border-t border-slate-100 no-print">
@@ -295,7 +297,7 @@
         let transcriptionMode = 'offline'; // 'live' or 'offline'
         let modeLocked = false;
         let fontMenuOpen = false;
-        let reviewEnabled = true;
+        let reviewEnabled = false;
         let pendingHtml = "";
         let savedHeaderHtml = "";
         let headerDirty = false;
