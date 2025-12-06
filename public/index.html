@@ -15,11 +15,11 @@
         }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen p-6 md:p-8 font-sans text-slate-800 text-base leading-relaxed">
+<body class="bg-slate-50 min-h-screen p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-base leading-relaxed">
 
     <!-- LOGIN UI -->
     <div id="loginScreen" class="min-h-screen flex items-center justify-center">
-        <div class="w-full max-w-5xl grid md:grid-cols-2 gap-10 items-center">
+        <div class="w-full max-w-5xl grid md:grid-cols-2 gap-8 md:gap-10 items-center px-1">
             <div class="space-y-4">
                 <p class="inline-flex items-center gap-2 text-xs font-semibold text-blue-900 bg-blue-100 px-3 py-1 rounded-full w-fit tracking-tight">Clinova Rx · India</p>
                 <h1 class="text-4xl md:text-5xl font-extrabold text-blue-900 leading-tight tracking-tight">Dictate faster, prescribe smarter.</h1>
@@ -56,49 +56,81 @@
 
     <!-- MAIN APP -->
     <div id="appScreen" class="hidden min-h-screen flex flex-col items-center gap-4">
-        <div class="w-full max-w-3xl no-print">
+        <div class="w-full max-w-3xl no-print px-1 sm:px-0">
             <div class="text-blue-900 font-extrabold text-3xl tracking-tight">Clinova Rx</div>
         </div>
-        <div class="w-full max-w-3xl no-print mb-4">
-            <div class="grid grid-cols-3 items-center gap-2 bg-white border border-slate-200 rounded-lg shadow px-4 py-3 text-sm font-semibold text-slate-800">
-                <div class="flex items-center justify-start">
-                    <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-slate-800 hover:text-blue-700">Voice Macros</button>
-                </div>
-                <div class="flex justify-center">
-                    <div id="aiReviewToggle" class="relative flex items-center gap-2 bg-white border border-slate-200 rounded-md px-3 py-2 cursor-pointer hover:shadow-md transition" onclick="handleAiToggleClick()">
-                        <div class="flex flex-col leading-tight">
-                            <div class="text-[10px] uppercase tracking-wide text-slate-500">AI Reviewer</div>
-                            <div id="aiToggleLabel" class="text-sm font-semibold text-blue-900">Enabled</div>
-                        </div>
+        <div class="w-full max-w-3xl no-print mb-4 px-1 sm:px-0">
+            <div class="bg-white border border-slate-200 rounded-lg shadow px-4 py-3 text-sm font-semibold text-slate-800">
+                <div class="sm:hidden space-y-2">
+                    <div class="flex items-center justify-between gap-3">
+                        <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-slate-800 hover:text-blue-700">Voice Macros</button>
                         <div class="flex items-center gap-2">
-                            <div class="relative group">
-                                <button type="button" class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-bold focus:outline-none">
-                                    i
-                                </button>
-                                <div class="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg shadow-xl px-3 py-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition z-40">
-                                    Automatically reviews AI output for safety, catches hallucinations, and formats before printing.
-                                </div>
+                            <span class="px-3 py-1 rounded-full bg-slate-100 text-slate-800">Rx: <span id="creditDisplay">0</span></span>
+                            <button onclick="logout()" class="text-slate-700 hover:text-blue-700">Logout</button>
+                        </div>
+                    </div>
+                    <div class="flex justify-center">
+                        <div id="aiReviewToggleMobile" class="relative flex items-center gap-2 bg-white border border-slate-200 rounded-md px-3 py-2 cursor-pointer hover:shadow-md transition w-full justify-between" onclick="handleAiToggleClick()">
+                            <div class="flex flex-col leading-tight">
+                                <div class="text-[10px] uppercase tracking-wide text-slate-500">AI Reviewer</div>
+                                <div id="aiToggleLabelMobile" class="text-sm font-semibold text-blue-900">Enabled</div>
                             </div>
-                            <div id="aiToggleTrack" class="w-12 h-6 rounded-full bg-slate-200 transition relative overflow-hidden">
-                                <div id="aiToggleKnob" class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"></div>
+                            <div class="flex items-center gap-2">
+                                <div class="relative group">
+                                    <button type="button" class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-bold focus:outline-none">
+                                        i
+                                    </button>
+                                    <div class="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg shadow-xl px-3 py-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition z-40">
+                                        Automatically reviews AI output for safety, catches hallucinations, and formats before printing.
+                                    </div>
+                                </div>
+                                <div id="aiToggleTrackMobile" class="w-12 h-6 rounded-full bg-slate-200 transition relative overflow-hidden">
+                                    <div id="aiToggleKnobMobile" class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="flex items-center justify-end gap-3">
-                    <span class="px-3 py-1 rounded-full bg-slate-100 text-slate-800">Prescriptions: <span id="creditDisplay">0</span></span>
-                    <button onclick="logout()" class="text-slate-700 hover:text-blue-700">Logout</button>
+                <div class="hidden sm:grid grid-cols-3 items-center gap-2">
+                    <div class="flex items-center justify-start">
+                        <button onclick="document.getElementById('macroModal').classList.remove('hidden')" class="text-slate-800 hover:text-blue-700">Voice Macros</button>
+                    </div>
+                    <div class="flex justify-center">
+                        <div id="aiReviewToggle" class="relative flex items-center gap-2 bg-white border border-slate-200 rounded-md px-3 py-2 cursor-pointer hover:shadow-md transition" onclick="handleAiToggleClick()">
+                            <div class="flex flex-col leading-tight">
+                                <div class="text-[10px] uppercase tracking-wide text-slate-500">AI Reviewer</div>
+                                <div id="aiToggleLabel" class="text-sm font-semibold text-blue-900">Enabled</div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="relative group">
+                                    <button type="button" class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs font-bold focus:outline-none">
+                                        i
+                                    </button>
+                                    <div class="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg shadow-xl px-3 py-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition z-40">
+                                        Automatically reviews AI output for safety, catches hallucinations, and formats before printing.
+                                    </div>
+                                </div>
+                                <div id="aiToggleTrack" class="w-12 h-6 rounded-full bg-slate-200 transition relative overflow-hidden">
+                                    <div id="aiToggleKnob" class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-end gap-3">
+                        <span class="px-3 py-1 rounded-full bg-slate-100 text-slate-800">Prescriptions: <span id="creditDisplayDesktop">0</span></span>
+                        <button onclick="logout()" class="text-slate-700 hover:text-blue-700">Logout</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="max-w-3xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-visible print-area min-h-[80vh] flex flex-col relative">
-            <div class="px-6 py-4 flex justify-end items-center border-b border-slate-100 no-print">
+        <div class="max-w-3xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-visible print-area min-h-[65vh] sm:min-h-[75vh] md:min-h-[80vh] flex flex-col relative">
+            <div class="px-4 sm:px-6 py-3 sm:py-4 flex justify-end items-center border-b border-slate-100 no-print">
                 <span id="headerStatus" class="text-xs text-emerald-600 h-4 font-semibold"></span>
             </div>
             <div class="relative">
-                <div id="docHeader" contenteditable="true" class="p-8 cursor-text hover:bg-slate-50 transition font-sans text-slate-800"></div>
-                <div id="headerActions" class="hidden absolute top-4 right-6 flex items-center gap-2 bg-white/95 border border-slate-200 rounded-md shadow px-2 py-1 no-print">
+                <div id="docHeader" contenteditable="true" class="p-4 sm:p-6 md:p-8 cursor-text hover:bg-slate-50 transition font-sans text-slate-800"></div>
+                <div id="headerActions" class="hidden absolute top-3 right-3 sm:top-4 sm:right-6 flex items-center gap-2 bg-white/95 border border-slate-200 rounded-md shadow px-2 py-1 no-print">
                     <button onclick="saveHeader()" class="w-8 h-8 flex items-center justify-center rounded-md bg-emerald-500 text-white hover:bg-emerald-600 transition" aria-label="Save header">
                         <svg class="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M4 10.5 8.5 15 16 6"/>
@@ -111,24 +143,24 @@
                     </button>
                 </div>
             </div>
-            <div id="livePreview" class="px-8 pt-2 text-slate-400 text-sm italic h-6 overflow-hidden"></div>
-            <div id="content" contenteditable="true" class="p-8 flex-grow prose max-w-none focus:outline-none font-sans text-slate-800">
+            <div id="livePreview" class="px-4 sm:px-8 pt-2 text-slate-400 text-sm italic h-6 overflow-hidden"></div>
+            <div id="content" contenteditable="true" class="p-4 sm:p-6 md:p-8 flex-grow prose max-w-none focus:outline-none font-sans text-slate-800">
                 <p id="placeholder" class="text-slate-300 italic no-print">Tap to start prescription...</p>
             </div>
-            <div class="bg-white px-6 py-5 border-t border-slate-100 no-print">
+            <div class="bg-white px-4 sm:px-6 py-4 sm:py-5 border-t border-slate-100 no-print">
                 <div class="w-full max-w-3xl mx-auto flex flex-col items-center gap-3">
-                    <div id="countdownBadge" class="hidden text-xs font-semibold text-amber-600 bg-amber-100 px-2 py-1 rounded-full"></div>
+                    <div id="countdownBadge" class="hidden text-xs font-semibold text-amber-600 bg-amber-100 px-2 py-1 rounded-full text-center"></div>
                     <div class="w-full">
                         <canvas id="waveform" class="w-full h-10 rounded-full bg-slate-100 border border-slate-200 opacity-0 transition-opacity duration-500"></canvas>
                     </div>
                     <div class="relative flex flex-col items-center gap-1">
                         <div class="flex items-center gap-4">
-                            <button id="recordFab" onclick="handleRecordAction()" class="w-20 h-20 rounded-full bg-rose-600 text-white shadow-xl border-4 border-white flex items-center justify-center transition-all active:scale-95">
+                            <button id="recordFab" onclick="handleRecordAction()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-rose-600 text-white shadow-xl border-4 border-white flex items-center justify-center transition-all active:scale-95">
                                 <svg id="recordIcon" class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 14a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v4a3 3 0 0 0 3 3Z"/><path d="M7 11a5 5 0 0 0 10 0h-1.5a3.5 3.5 0 0 1-7 0H7Z"/><path d="M12 17v3m0 0h-3m3 0h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                                 </svg>
                             </button>
-                            <button id="stopButton" onclick="handleStopAction()" class="hidden w-20 h-20 rounded-full bg-slate-800 text-white shadow-xl border-4 border-white flex items-center justify-center transition-all active:scale-95">
+                            <button id="stopButton" onclick="handleStopAction()" class="hidden w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-800 text-white shadow-xl border-4 border-white flex items-center justify-center transition-all active:scale-95">
                                 <svg id="stopIcon" class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
                                 <span class="sr-only">Stop</span>
                             </button>
@@ -137,8 +169,15 @@
                     <p id="recordLabel" class="text-sm font-semibold text-slate-700">Tap to start prescription</p>
                     <p id="status" class="text-center text-xs text-slate-500 font-bold min-h-[1.5rem] whitespace-pre-line px-4">READY</p>
                 </div>
-                <div class="w-full grid grid-cols-1 md:grid-cols-3 items-center mt-4 gap-3">
-                    <div class="flex justify-start md:col-span-1 gap-3 items-center">
+                <div class="w-full flex flex-col md:grid md:grid-cols-3 items-center mt-4 gap-3">
+                    <div class="flex justify-center w-full order-1 md:order-2">
+                        <div class="text-blue-900 font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
+                    </div>
+                    <div class="flex justify-center items-center gap-3 w-full order-2 md:order-3">
+                        <button onclick="handleClear()" class="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg text-xs font-semibold">Clear</button>
+                        <button onclick="handlePrint()" class="bg-blue-800 hover:bg-blue-900 text-white px-5 py-2 rounded-lg text-sm font-semibold shadow transition">Print</button>
+                    </div>
+                    <div class="flex justify-center md:justify-start items-center gap-3 w-full order-3 md:order-1">
                         <div class="relative">
                             <button id="fontButton" onclick="toggleFontMenu()" class="bg-white border border-slate-200 rounded-md px-3 py-2 text-xs font-medium text-slate-700 shadow-sm flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-blue-300">
                                 <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.89 3.31.877 2.42 2.42a1.724 1.724 0 001.065 2.572c1.757.426 1.757 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.89 1.543-.877 3.31-2.42 2.42a1.724 1.724 0 00-2.572 1.065c-.427 1.757-2.925 1.757-3.351 0a1.724 1.724 0 00-2.572-1.066c-1.543.89-3.31-.876-2.42-2.42a1.724 1.724 0 00-1.065-2.572c-1.757-.427-1.757-2.925 0-3.351a1.724 1.724 0 001.066-2.572c-.89-1.543.877-3.31 2.42-2.42.996.574 2.273.096 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 15.75a3.75 3.75 0 100-7.5 3.75 3.75 0 000 7.5z"/></svg>
@@ -184,13 +223,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="flex justify-center">
-                        <div class="text-blue-900 font-mono text-lg tracking-wide" id="timerDisplay">00:00</div>
-                    </div>
-                    <div class="flex justify-end items-center gap-3">
-                        <button onclick="window.location.reload()" class="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg text-xs font-semibold">Clear</button>
-                        <button onclick="handlePrint()" class="bg-blue-800 hover:bg-blue-900 text-white px-5 py-2 rounded-lg text-sm font-semibold shadow transition">Print</button>
                     </div>
                 </div>
             </div>
@@ -336,7 +368,7 @@
                 const res = await fetch('/api/me');
                 if (res.status === 401) throw new Error("Unauthorized");
                 const data = await res.json();
-                document.getElementById('creditDisplay').innerText = data.credits;
+                setCreditDisplay(data.credits);
                 const headerEl = document.getElementById('docHeader');
                 if (headerEl) {
                     headerEl.innerHTML = data.header_html || "<h1>Dr. Name</h1><p>Edit Header...</p>";
@@ -456,6 +488,18 @@
             const statusEl = document.getElementById('status');
             statusEl.innerText = text;
             statusEl.className = `text-center text-xs font-bold mb-4 min-h-[1.5rem] whitespace-pre-line px-4 ${colorClass || 'text-gray-500'}`;
+        }
+
+        function setTimerDisplayText(text) {
+            const desktop = document.getElementById('timerDisplay');
+            if (desktop) desktop.innerText = text;
+        }
+
+        function setCreditDisplay(value) {
+            const primary = document.getElementById('creditDisplay');
+            const secondary = document.getElementById('creditDisplayDesktop');
+            if (primary) primary.innerText = value;
+            if (secondary) secondary.innerText = value;
         }
 
         function setMode(mode, skipPersist = false) {
@@ -579,24 +623,28 @@
             reviewEnabled = value;
             const toggle = document.getElementById('reviewToggle');
             if (toggle) toggle.checked = reviewEnabled;
-            const knob = document.getElementById('aiToggleKnob');
-            const label = document.getElementById('aiToggleLabel');
-            const wrap = document.getElementById('aiReviewToggle');
-            const track = document.getElementById('aiToggleTrack');
-            if (knob) {
+
+            const knobs = [document.getElementById('aiToggleKnob'), document.getElementById('aiToggleKnobMobile')].filter(Boolean);
+            const labels = [document.getElementById('aiToggleLabel'), document.getElementById('aiToggleLabelMobile')].filter(Boolean);
+            const wraps = [document.getElementById('aiReviewToggle'), document.getElementById('aiReviewToggleMobile')].filter(Boolean);
+            const tracks = [document.getElementById('aiToggleTrack'), document.getElementById('aiToggleTrackMobile')].filter(Boolean);
+
+            knobs.forEach(knob => {
                 knob.style.transform = reviewEnabled ? 'translateX(24px)' : 'translateX(0px)';
                 knob.className = `absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200`;
-            }
-            if (label) {
+            });
+            labels.forEach(label => {
                 label.innerText = reviewEnabled ? "Enabled" : "Disabled";
                 label.className = `text-sm font-semibold ${reviewEnabled ? 'text-blue-900' : 'text-slate-500'}`;
-            }
-            if (wrap) {
+            });
+            wraps.forEach(wrap => {
                 wrap.classList.toggle('ring-2', reviewEnabled);
                 wrap.classList.toggle('ring-green-200', reviewEnabled);
                 wrap.classList.toggle('bg-green-50', reviewEnabled);
-            }
-            if (track) track.className = `w-12 h-6 rounded-full transition relative overflow-hidden ${reviewEnabled ? 'bg-green-500' : 'bg-slate-200'}`;
+            });
+            tracks.forEach(track => {
+                track.className = `w-12 h-6 rounded-full transition relative overflow-hidden ${reviewEnabled ? 'bg-green-500' : 'bg-slate-200'}`;
+            });
             if (!skipPersist) localStorage.setItem('aiReviewEnabled', reviewEnabled ? 'true' : 'false');
         }
 
@@ -659,7 +707,7 @@
                 label.innerText = "Tap to start prescription";
                 wave.classList.add('opacity-0');
                 if (stopBtn) stopBtn.classList.add('hidden');
-                document.getElementById('timerDisplay').innerText = "00:00";
+                setTimerDisplayText("00:00");
             } else if (state === 'recording') {
                 fab.className = "w-16 h-16 rounded-full bg-red-600 text-white shadow-lg flex items-center justify-center transition-all scale-105 animate-pulse";
                 setFabIcon('pause');
@@ -742,11 +790,11 @@
         function handleResult(data) {
             if (timerInterval) clearInterval(timerInterval);
             elapsedSeconds = 0;
-            document.getElementById('timerDisplay').innerText = "00:00";
+            setTimerDisplayText("00:00");
             document.getElementById('countdownBadge').classList.add('hidden');
             stopWaveform();
             if (data.success) {
-                document.getElementById('creditDisplay').innerText = data.credits;
+                setCreditDisplay(data.credits);
                 if (reviewEnabled) {
                     pendingHtml = data.html;
                     updateStatus("AI review in progress…", "text-blue-600");
@@ -772,7 +820,7 @@
             transcriptBuffer = "";
             backupAudioChunks = [];
             elapsedSeconds = 0;
-            document.getElementById('timerDisplay').innerText = "00:00";
+            setTimerDisplayText("00:00");
             
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -970,19 +1018,38 @@
             window.print();
         }
 
+        function handleClear() {
+            isRecording = false;
+            modeLocked = false;
+            if (timerInterval) clearInterval(timerInterval);
+            elapsedSeconds = 0;
+            transcriptBuffer = "";
+            pendingHtml = "";
+            backupAudioChunks = [];
+            pcmQueue = [];
+            setRecordState('idle');
+            setTimerDisplayText("00:00");
+            const badge = document.getElementById('countdownBadge');
+            if (badge) badge.classList.add('hidden');
+            const livePreview = document.getElementById('livePreview');
+            if (livePreview) livePreview.innerText = "";
+            const content = document.getElementById('content');
+            if (content) content.innerHTML = '<p id="placeholder" class="text-slate-300 italic no-print">Tap to start prescription...</p>';
+            updateStatus("READY", "text-gray-500");
+        }
+
         function startTimer(reset = false) {
-            const timerEl = document.getElementById('timerDisplay');
             const badge = document.getElementById('countdownBadge');
             if (reset) {
                 elapsedSeconds = 0;
-                timerEl.innerText = "00:00";
+                setTimerDisplayText("00:00");
             }
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(() => {
                 elapsedSeconds++;
                 const m = Math.floor(elapsedSeconds / 60);
                 const s = elapsedSeconds % 60;
-                timerEl.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+                setTimerDisplayText(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
                 badge.classList.add('hidden');
             }, 1000);
         }
