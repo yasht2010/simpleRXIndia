@@ -6,7 +6,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import session from 'express-session';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import SQLiteStore from 'connect-sqlite3';
+import pgSession from 'connect-pg-simple';
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -59,11 +60,24 @@ const S3_REGION = process.env.AWS_REGION;
 const S3_BUCKET = process.env.S3_BUCKET;
 const TRANSCRIPTION_PROVIDER = (process.env.TRANSCRIPTION_PROVIDER || 'deepgram').toLowerCase();
 const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
+const SUPABASE_DB_URL = process.env.SUPABASE_DB_URL;
 
 // --- SESSION CONFIG ---
-const SQLStore = SQLiteStore(session);
+if (!SUPABASE_DB_URL) throw new Error('SUPABASE_DB_URL env missing for session storage');
+const { Pool } = pg;
+const pgPool = new Pool({
+    connectionString: SUPABASE_DB_URL,
+    ssl: { rejectUnauthorized: false }
+});
+pgPool.on('error', (err) => console.error('Postgres pool error:', err));
+const PGStore = pgSession(session);
+
 const sessionMiddleware = session({
-    store: new SQLStore({ dir: __dirname, db: 'smartrx.db' }),
+    store: new PGStore({
+        pool: pgPool,
+        tableName: 'session',
+        createTableIfMissing: true
+    }),
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
@@ -236,21 +250,19 @@ io.on('connection', (socket) => {
 
         console.log(`📝 Finalizing... Text Length: ${fullTranscript?.length}`);
 
-        // If empty, trigger backup
-        if (TRANSCRIPTION_PROVIDER !== 'deepgram' || !fullTranscript || fullTranscript.trim().length < 2) {
-            socket.emit('use-backup-upload', {}); 
-            return;
-        }
-
-        // Deduct Credit
-        const hasBalance = await db.deductCredit(userId);
-        if (!hasBalance) {
-            socket.emit('prescription-result', { success: false, error: "Low Balance." });
-            return;
-        }
-
-        // Gemini Processing
         try {
+            // If empty, trigger backup
+            if (TRANSCRIPTION_PROVIDER !== 'deepgram' || !fullTranscript || fullTranscript.trim().length < 2) {
+                socket.emit('use-backup-upload', {}); 
+                return;
+            }
+
+            const hasBalance = await db.deductCredit(userId);
+            if (!hasBalance) {
+                socket.emit('prescription-result', { success: false, error: "Low Balance." });
+                return;
+            }
+
             const macros = await db.getMacros(userId);
             const model = genAI.getGenerativeModel({ model: SCRIBE_MODEL });
             const prompt = generateScribePrompt(fullTranscript, context, macros);
@@ -278,10 +290,15 @@ io.on('connection', (socket) => {
 // (These remain exactly the same as your previous working version)
 
 app.post('/api/login', authLimiter, async (req, res) => {
-    const user = await db.getUser(req.body.phone);
-    if (user && bcrypt.compareSync(req.body.password, user.password)) {
-        req.session.userId = user.id; res.json({ success: true });
-    } else res.json({ success: false, message: "Invalid" });
+    try {
+        const user = await db.getUser(req.body.phone);
+        if (user && bcrypt.compareSync(req.body.password, user.password)) {
+            req.session.userId = user.id; res.json({ success: true });
+        } else res.json({ success: false, message: "Invalid" });
+    } catch (e) {
+        console.error('Login error:', e);
+        res.status(500).json({ success: false, message: "Login failed" });
+    }
 });
 app.post('/api/logout', (req, res) => {
     req.session.userId = null;
@@ -319,12 +336,17 @@ app.post('/api/register', authLimiter, async (req, res) => {
 
 // Registration with OTP (static for now)
 app.post('/api/register/send-otp', authLimiter, async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ error: "Phone required" });
-    const existing = await db.getUser(phone);
-    if (existing) return res.status(400).json({ error: "User exists" });
-    req.session.pendingPhone = phone;
-    res.json({ success: true });
+    try {
+        const { phone } = req.body;
+        if (!phone) return res.status(400).json({ error: "Phone required" });
+        const existing = await db.getUser(phone);
+        if (existing) return res.status(400).json({ error: "User exists" });
+        req.session.pendingPhone = phone;
+        res.json({ success: true });
+    } catch (e) {
+        console.error('OTP send error:', e);
+        res.status(500).json({ error: "OTP flow failed" });
+    }
 });
 
 app.post('/api/register/verify-otp', authLimiter, (req, res) => {
@@ -350,24 +372,55 @@ app.post('/api/register/complete', authLimiter, async (req, res) => {
     }
 });
 app.get('/api/me', async (req, res) => {
-    if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
-    const user = await db.getUserById(req.session.userId);
-    if (!user) { req.session.destroy(); return res.status(401).json({ error: "User not found" }); }
-    const credits = await db.getCredits(req.session.userId);
-    res.json({ phone: user.phone, credits: credits, header_html: sanitizeContent(user.header_html || "") });
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+        const user = await db.getUserById(req.session.userId);
+        if (!user) { req.session.destroy(); return res.status(401).json({ error: "User not found" }); }
+        const credits = await db.getCredits(req.session.userId);
+        res.json({ phone: user.phone, credits: credits, header_html: sanitizeContent(user.header_html || "") });
+    } catch (e) {
+        console.error('/api/me error:', e);
+        res.status(500).json({ error: "Failed to fetch user" });
+    }
 });
 app.post('/api/header', async (req, res) => { 
-    if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
-    const clean = sanitizeContent(req.body.html || "");
-    await db.updateHeader(req.session.userId, clean); 
-    res.json({ success: true }); 
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+        const clean = sanitizeContent(req.body.html || "");
+        await db.updateHeader(req.session.userId, clean); 
+        res.json({ success: true }); 
+    } catch (e) {
+        console.error('Update header error:', e);
+        res.status(500).json({ success: false, error: "Failed to update header" });
+    }
 });
-app.get('/api/macros', async (req, res) => { if (!req.session.userId) return res.json([]); res.json(await db.getMacros(req.session.userId)); });
-app.post('/api/macros', async (req, res) => { await db.saveMacro(req.session.userId, req.body.trigger, req.body.expansion); res.json({ success: true }); });
+app.get('/api/macros', async (req, res) => { 
+    try {
+        if (!req.session.userId) return res.json([]);
+        res.json(await db.getMacros(req.session.userId)); 
+    } catch (e) {
+        console.error('Get macros error:', e);
+        res.status(500).json({ error: "Failed to fetch macros" });
+    }
+});
+app.post('/api/macros', async (req, res) => { 
+    try {
+        await db.saveMacro(req.session.userId, req.body.trigger, req.body.expansion); 
+        res.json({ success: true }); 
+    } catch (e) {
+        console.error('Save macro error:', e);
+        res.status(500).json({ success: false, error: "Failed to save macro" });
+    }
+});
 app.post('/api/macros/delete', async (req, res) => { 
-    if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
-    await db.deleteMacro(req.session.userId, req.body.trigger);
-    res.json({ success: true }); 
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+        await db.deleteMacro(req.session.userId, req.body.trigger);
+        res.json({ success: true }); 
+    } catch (e) {
+        console.error('Delete macro error:', e);
+        res.status(500).json({ success: false, error: "Failed to delete macro" });
+    }
 });
 
 // --- REVIEW ENDPOINT ---
@@ -410,8 +463,25 @@ app.post('/api/format', aiLimiter, async (req, res) => {
         res.status(500).json({ success: false, error: e.message });
     }
 });
-app.get('/settings', async (req, res) => { if (!req.session.userId) return res.status(401).json({}); res.json(await db.getSettings(req.session.userId) || {}); });
-app.post('/settings', async (req, res) => { if (!req.session.userId) return res.status(401).json({}); await db.saveSettings(req.session.userId, req.body); res.json({ success: true }); });
+app.get('/settings', async (req, res) => { 
+    try {
+        if (!req.session.userId) return res.status(401).json({});
+        res.json(await db.getSettings(req.session.userId) || {}); 
+    } catch (e) {
+        console.error('Get settings error:', e);
+        res.status(500).json({ error: "Failed to fetch settings" });
+    }
+});
+app.post('/settings', async (req, res) => { 
+    try {
+        if (!req.session.userId) return res.status(401).json({});
+        await db.saveSettings(req.session.userId, req.body); 
+        res.json({ success: true }); 
+    } catch (e) {
+        console.error('Save settings error:', e);
+        res.status(500).json({ success: false, error: "Failed to save settings" });
+    }
+});
 
 // --- ADMIN ROUTES ---
 const requireAdmin = (req, res, next) => {
@@ -435,29 +505,44 @@ app.post('/api/admin/logout', (req, res) => {
 });
 
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
-    const users = await db.listUsers();
-    res.json(users.map(u => ({
-        id: u.id,
-        phone: u.phone,
-        doctor_name: u.doctor_name,
-        qualification: u.qualification,
-        clinic_details: u.clinic_details,
-        credits: u.credits // represent prescriptions count
-    })));
+    try {
+        const users = await db.listUsers();
+        res.json(users.map(u => ({
+            id: u.id,
+            phone: u.phone,
+            doctor_name: u.doctor_name,
+            qualification: u.qualification,
+            clinic_details: u.clinic_details,
+            credits: u.credits // represent prescriptions count
+        })));
+    } catch (e) {
+        console.error('Admin list users error:', e);
+        res.status(500).json({ error: 'Failed to load users' });
+    }
 });
 
 app.post('/api/admin/credits', requireAdmin, async (req, res) => {
-    const { userId, amount } = req.body;
-    if (!userId || !amount) return res.status(400).json({ error: 'Missing params' });
-    await db.addCredits(userId, Number(amount));
-    res.json({ success: true });
+    try {
+        const { userId, amount } = req.body;
+        if (!userId || !amount) return res.status(400).json({ error: 'Missing params' });
+        await db.addCredits(userId, Number(amount));
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Admin add credits error:', e);
+        res.status(500).json({ error: 'Failed to update credits' });
+    }
 });
 
 app.post('/api/admin/remove-user', requireAdmin, async (req, res) => {
-    const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'Missing userId' });
-    await db.removeUser(userId);
-    res.json({ success: true });
+    try {
+        const { userId } = req.body;
+        if (!userId) return res.status(400).json({ error: 'Missing userId' });
+        await db.removeUser(userId);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Admin remove user error:', e);
+        res.status(500).json({ error: 'Failed to remove user' });
+    }
 });
 
 // --- PROCESS FROM S3 ---

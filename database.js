@@ -1,195 +1,228 @@
-import sqlite3 from 'sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const dbPath = path.join(__dirname, 'smartrx.db');
+// Ensure env vars are loaded even when this module is imported before server bootstrap
+dotenv.config();
 
-const db = new sqlite3.Database(dbPath);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-db.serialize(() => {
-    // 1. Users Table (Now with ALL fields)
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        phone TEXT UNIQUE,
-        password TEXT,
-        credits INTEGER DEFAULT 50,
-        header_html TEXT,
-        custom_keywords TEXT,
-        doctor_name TEXT,
-        qualification TEXT,
-        reg_no TEXT,
-        clinic_details TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error('Supabase env vars missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+}
 
-    // 2. Macros Table
-    db.run(`CREATE TABLE IF NOT EXISTS macros (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        trigger_phrase TEXT,
-        expansion TEXT,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )`);
-    
-    // 3. Admin Seed (Fixed to match new schema)
-    db.get("SELECT * FROM users WHERE phone = '9999999999'", (err, row) => {
-        if (!row) {
-            const hash = bcrypt.hashSync("admin123", 10);
-            db.run(`INSERT INTO users (phone, password, credits, doctor_name, header_html) 
-                VALUES ('9999999999', '${hash}', 100, 'Dr. Admin', '<h1>Dr. Admin</h1><p>System User</p>')`);
-        }
+export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+const seedAdminUser = async () => {
+    const { data: existing, error: existingError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', '9999999999')
+        .maybeSingle();
+
+    // If the table doesn't exist yet (Supabase error PGRST205), just skip quietly.
+    if (existingError) {
+        if (existingError.code === 'PGRST205') return;
+        console.error('Error checking admin seed:', existingError);
+        return;
+    }
+    if (existing) return;
+
+    const hash = bcrypt.hashSync('admin123', 10);
+    const { error } = await supabase.from('users').insert({
+        phone: '9999999999',
+        password: hash,
+        credits: 100,
+        doctor_name: 'Dr. Admin',
+        header_html: '<h1>Dr. Admin</h1><p>System User</p>'
     });
-});
+
+    if (error) console.error('Error seeding admin:', error);
+};
+
+seedAdminUser();
 
 // --- USER FUNCTIONS ---
 
-export const getUser = (phone) => {
-    return new Promise((resolve, reject) => {
-        db.get("SELECT * FROM users WHERE phone = ?", [phone], (err, row) => {
-            if (err) reject(err); else resolve(row);
-        });
-    });
+export const getUser = async (phone) => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('phone', phone)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data;
 };
 
-export const getUserById = (id) => {
-    return new Promise((resolve, reject) => {
-        db.get("SELECT * FROM users WHERE id = ?", [id], (err, row) => {
-            if (err) reject(err); else resolve(row);
-        });
-    });
+export const getUserById = async (id) => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data;
 };
 
-export const createUser = (phone, password) => {
-    return new Promise((resolve, reject) => {
-        const hash = bcrypt.hashSync(password, 10);
-        const defaultHeader = `<h1>Dr. ${phone}</h1><p>MBBS</p>`;
-        db.run("INSERT INTO users (phone, password, header_html, doctor_name) VALUES (?, ?, ?, ?)", 
-            [phone, hash, defaultHeader, `Dr. ${phone}`], function(err) {
-            if (err) reject(err); else resolve(this.lastID);
-        });
-    });
+export const createUser = async (phone, password) => {
+    const hash = bcrypt.hashSync(password, 10);
+    const defaultHeader = `<h1>Dr. ${phone}</h1><p>MBBS</p>`;
+    const { data, error } = await supabase
+        .from('users')
+        .insert({
+            phone,
+            password: hash,
+            header_html: defaultHeader,
+            doctor_name: `Dr. ${phone}`
+        })
+        .select('id')
+        .maybeSingle();
+
+    if (error) throw error;
+    return data?.id;
 };
 
-export const createUserWithDetails = (phone, password, doctorName = "", qualification = "", regNo = "") => {
-    return new Promise((resolve, reject) => {
-        const hash = bcrypt.hashSync(password, 10);
-        const headerHtml = (doctorName || qualification || regNo) ? `<h1>${doctorName || ''}</h1><p>${qualification || ''}</p>` : "";
-        db.run(
-            "INSERT INTO users (phone, password, header_html, doctor_name, qualification, reg_no) VALUES (?, ?, ?, ?, ?, ?)", 
-            [phone, hash, headerHtml, doctorName, qualification, regNo],
-            function(err) {
-                if (err) reject(err); else resolve(this.lastID);
-            }
-        );
-    });
+export const createUserWithDetails = async (phone, password, doctorName = "", qualification = "", regNo = "") => {
+    const hash = bcrypt.hashSync(password, 10);
+    const headerHtml = (doctorName || qualification || regNo) ? `<h1>${doctorName || ''}</h1><p>${qualification || ''}</p>` : "";
+
+    const { data, error } = await supabase
+        .from('users')
+        .insert({
+            phone,
+            password: hash,
+            header_html: headerHtml,
+            doctor_name: doctorName || `Dr. ${phone}`,
+            qualification,
+            reg_no: regNo
+        })
+        .select('id')
+        .maybeSingle();
+
+    if (error) throw error;
+    return data?.id;
 };
 
-export const updateHeader = (userId, html) => {
-    return new Promise((resolve, reject) => {
-        db.run("UPDATE users SET header_html = ? WHERE id = ?", [html, userId], (err) => {
-            if (err) reject(err); else resolve(true);
-        });
-    });
+export const updateHeader = async (userId, html) => {
+    const { error } = await supabase
+        .from('users')
+        .update({ header_html: html })
+        .eq('id', userId);
+
+    if (error) throw error;
+    return true;
 };
 
 // --- SETTINGS FUNCTIONS (Fixed) ---
 
-export const getSettings = (userId) => {
-    return new Promise((resolve, reject) => {
-        db.get("SELECT header_html, custom_keywords, doctor_name, qualification, reg_no, clinic_details FROM users WHERE id = ?", [userId], (err, row) => {
-            if (err) reject(err); 
-            else resolve(row);
-        });
-    });
+export const getSettings = async (userId) => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('header_html, custom_keywords, doctor_name, qualification, reg_no, clinic_details')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data;
 };
 
-export const saveSettings = (userId, data) => {
-    return new Promise((resolve, reject) => {
-        const { doctor_name, qualification, reg_no, clinic_details, custom_keywords } = data;
-        
-        // Update all fields
-        db.run(`UPDATE users SET 
-            doctor_name=?, qualification=?, reg_no=?, clinic_details=?, custom_keywords=? 
-            WHERE id=?`, 
-            [doctor_name, qualification, reg_no, clinic_details, custom_keywords, userId], 
-            (err) => {
-                if (err) reject(err); else resolve(true);
-            }
-        );
-    });
+export const saveSettings = async (userId, data) => {
+    const { doctor_name, qualification, reg_no, clinic_details, custom_keywords } = data;
+    const { error } = await supabase
+        .from('users')
+        .update({
+            doctor_name,
+            qualification,
+            reg_no,
+            clinic_details,
+            custom_keywords
+        })
+        .eq('id', userId);
+
+    if (error) throw error;
+    return true;
 };
 
 // --- WALLET FUNCTIONS ---
 
-export const getCredits = (userId) => {
-    return new Promise((resolve, reject) => {
-        db.get("SELECT credits FROM users WHERE id = ?", [userId], (err, row) => {
-            if (err) reject(err); else resolve(row ? row.credits : 0);
-        });
-    });
+export const getCredits = async (userId) => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('credits')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data?.credits || 0;
 };
 
-export const deductCredit = (userId) => {
-    return new Promise((resolve, reject) => {
-        db.run("UPDATE users SET credits = credits - 1 WHERE id = ? AND credits >= 1", [userId], function(err) {
-            if (err) reject(err);
-            else resolve(this.changes > 0); 
-        });
-    });
+export const deductCredit = async (userId) => {
+    const { data, error } = await supabase
+        .rpc('deduct_credit', { user_id_input: userId });
+
+    if (error) throw error;
+    return Array.isArray(data) ? data?.[0] : data; // boolean
 };
 
-export const listUsers = () => {
-    return new Promise((resolve, reject) => {
-        db.all("SELECT id, phone, credits, doctor_name, qualification, clinic_details FROM users", [], (err, rows) => {
-            if (err) reject(err); else resolve(rows || []);
-        });
-    });
+export const listUsers = async () => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('id, phone, credits, doctor_name, qualification, clinic_details');
+
+    if (error) throw error;
+    return data || [];
 };
 
-export const addCredits = (userId, amount) => {
-    return new Promise((resolve, reject) => {
-        db.run("UPDATE users SET credits = credits + ? WHERE id = ?", [amount, userId], function(err) {
-            if (err) reject(err); else resolve(this.changes > 0);
-        });
-    });
+export const addCredits = async (userId, amount) => {
+    const { error } = await supabase.rpc('add_credits', { user_id_input: userId, amount_input: amount });
+    if (error) throw error;
+    return true;
 };
 
-export const removeUser = (userId) => {
-    return new Promise((resolve, reject) => {
-        db.run("DELETE FROM users WHERE id = ?", [userId], function(err) {
-            if (err) reject(err); else resolve(this.changes > 0);
-        });
-    });
+export const removeUser = async (userId) => {
+    const { error } = await supabase.from('users').delete().eq('id', userId);
+    if (error) throw error;
+    return true;
 };
 
 // --- MACRO FUNCTIONS ---
 
-export const getMacros = (userId) => {
-    return new Promise((resolve, reject) => {
-        db.all("SELECT trigger_phrase, expansion FROM macros WHERE user_id = ?", [userId], (err, rows) => {
-            if (err) reject(err); else resolve(rows || []);
-        });
-    });
+export const getMacros = async (userId) => {
+    const { data, error } = await supabase
+        .from('macros')
+        .select('trigger_phrase, expansion')
+        .eq('user_id', userId);
+
+    if (error) throw error;
+    return data || [];
 };
 
-export const saveMacro = (userId, trigger, expansion) => {
-    return new Promise((resolve, reject) => {
-        db.run("DELETE FROM macros WHERE user_id = ? AND trigger_phrase = ?", [userId, trigger], () => {
-            db.run("INSERT INTO macros (user_id, trigger_phrase, expansion) VALUES (?, ?, ?)", 
-                [userId, trigger, expansion], (err) => {
-                if (err) reject(err); else resolve(true);
-            });
-        });
-    });
+export const saveMacro = async (userId, trigger, expansion) => {
+    const { error: deleteError } = await supabase
+        .from('macros')
+        .delete()
+        .eq('user_id', userId)
+        .eq('trigger_phrase', trigger);
+    if (deleteError) throw deleteError;
+
+    const { error } = await supabase
+        .from('macros')
+        .insert({ user_id: userId, trigger_phrase: trigger, expansion });
+
+    if (error) throw error;
+    return true;
 };
 
-export const deleteMacro = (userId, trigger) => {
-    return new Promise((resolve, reject) => {
-        db.run("DELETE FROM macros WHERE user_id = ? AND trigger_phrase = ?", [userId, trigger], function(err) {
-            if (err) reject(err); else resolve(this.changes > 0);
-        });
-    });
+export const deleteMacro = async (userId, trigger) => {
+    const { error } = await supabase
+        .from('macros')
+        .delete()
+        .eq('user_id', userId)
+        .eq('trigger_phrase', trigger);
+
+    if (error) throw error;
+    return true;
 };
