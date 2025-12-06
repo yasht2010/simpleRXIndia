@@ -647,13 +647,32 @@
         // --- BACKUP UPLOAD ---
         async function uploadBackup() {
             const blob = new Blob(backupAudioChunks, { type: recordedMimeType });
-            const formData = new FormData();
-            formData.append('audio', blob, 'backup_audio');
-            formData.append('context', document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML);
-
             try {
-                const res = await fetch('/api/process-backup', { method: 'POST', body: formData });
-                const data = await res.json();
+                // 1. Get presigned URL
+                const upRes = await fetch('/api/upload-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contentType: recordedMimeType || 'audio/webm' })
+                });
+                if (!upRes.ok) throw new Error(`Upload URL failed: ${upRes.status}`);
+                const upData = await upRes.json();
+
+                // 2. Upload to S3
+                const putRes = await fetch(upData.url, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': recordedMimeType || 'audio/webm' },
+                    body: blob
+                });
+                if (!putRes.ok) throw new Error(`S3 upload failed: ${putRes.status}`);
+
+                // 3. Process from S3
+                const procRes = await fetch('/api/process-s3', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: upData.key, context: document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML })
+                });
+                if (!procRes.ok) throw new Error(`Backup failed: ${procRes.status}`);
+                const data = await procRes.json();
                 handleResult(data);
             } catch (e) {
                 alert("Backup Upload Failed: " + e.message);

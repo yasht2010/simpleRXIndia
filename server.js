@@ -18,6 +18,10 @@ import { generateScribePrompt, generateReviewPrompt, generateFormatPrompt } from
 import crypto from 'crypto';
 import sanitizeHtml from 'sanitize-html';
 import OpenAI from 'openai';
+import { toFile } from 'openai/uploads';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { v4 as uuidv4 } from 'uuid';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +55,10 @@ const SCRIBE_MODEL = process.env.SCRIBE_MODEL || 'gemini-2.5-pro';
 const REVIEW_MODEL = process.env.REVIEW_MODEL || 'gemini-2.5-pro';
 const FORMAT_MODEL = process.env.FORMAT_MODEL || 'gemini-2.5-pro';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'change_me_session_secret';
+const S3_REGION = process.env.AWS_REGION;
+const S3_BUCKET = process.env.S3_BUCKET;
+const TRANSCRIPTION_PROVIDER = (process.env.TRANSCRIPTION_PROVIDER || 'deepgram').toLowerCase();
+const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
 
 // --- SESSION CONFIG ---
 const SQLStore = SQLiteStore(session);
@@ -77,8 +85,13 @@ const aiLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 30 });
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-const TRANSCRIPTION_PROVIDER = (process.env.TRANSCRIPTION_PROVIDER || 'deepgram').toLowerCase();
-const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
+const s3 = new S3Client({
+    region: S3_REGION,
+    credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    } : undefined
+});
 const sanitizeContent = (html = "") => sanitizeHtml(html, {
     allowedTags: ['h1','h2','h3','h4','p','b','strong','i','em','u','ul','ol','li','table','thead','tbody','tr','th','td','hr','br','span','div'],
     allowedAttributes: {
@@ -111,6 +124,11 @@ const wrap = (middleware) => (socket, next) => middleware(socket.request, socket
 io.use(wrap(sessionMiddleware));
 
 const cleanAI = (text = "") => text.replace(/```(?:html)?/gi, "").replace(/```/g, "").trim();
+const streamToBuffer = async (stream) => {
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    return Buffer.concat(chunks);
+};
 
 io.on('connection', (socket) => {
     const userId = socket.request.session.userId;
@@ -273,6 +291,27 @@ app.post('/api/logout', (req, res) => {
         res.json({ success: true });
     });
 });
+
+// S3 presigned URL for audio upload
+app.post('/api/upload-url', authLimiter, async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+        const { contentType } = req.body || {};
+        if (!contentType || !contentType.startsWith('audio/')) return res.status(400).json({ error: "Invalid content type" });
+        if (!S3_BUCKET || !S3_REGION) return res.status(500).json({ error: "S3 not configured" });
+        const key = `uploads/${req.session.userId}/${Date.now()}-${uuidv4()}.webm`;
+        const command = new PutObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: key,
+            ContentType: contentType
+        });
+        const url = await getSignedUrl(s3, command, { expiresIn: 300 });
+        res.json({ url, key, expiresIn: 300 });
+    } catch (e) {
+        console.error("Presign error:", e);
+        res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+});
 app.post('/api/register', authLimiter, async (req, res) => {
     try { await db.createUser(req.body.phone, req.body.password); res.json({ success: true }); } 
     catch (e) { res.json({ success: false, message: "Exists" }); }
@@ -419,6 +458,61 @@ app.post('/api/admin/remove-user', requireAdmin, async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
     await db.removeUser(userId);
     res.json({ success: true });
+});
+
+// --- PROCESS FROM S3 ---
+app.post('/api/process-s3', aiLimiter, async (req, res) => {
+    try {
+        if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+        const { key, context } = req.body || {};
+        console.log("📦 /api/process-s3 start", { userId: req.session.userId, key, hasContext: !!context });
+        if (!key || !key.startsWith(`uploads/${req.session.userId}/`)) return res.status(400).json({ error: "Invalid key" });
+        if (!S3_BUCKET) return res.status(500).json({ error: "S3 not configured" });
+
+        const creditDeducted = await db.deductCredit(req.session.userId);
+        console.log("💳 Credit deduct (process-s3)", { userId: req.session.userId, success: creditDeducted });
+
+        const obj = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        const audioBuffer = await streamToBuffer(obj.Body);
+        console.log("🎧 S3 object fetched", { key, bytes: audioBuffer.length });
+
+        let transcript = "";
+        if (TRANSCRIPTION_PROVIDER === 'deepgram') {
+            console.log("🔊 Transcribing with Deepgram", { model: DG_MODEL, language: DG_LANGUAGE });
+            const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
+                audioBuffer,
+                { model: DG_MODEL, smart_format: true, language: DG_LANGUAGE, mimetype: 'audio/webm' }
+            );
+            if (error) throw error;
+            transcript = result.results.channels[0].alternatives[0].transcript;
+        } else {
+            if (!openai) throw new Error("OpenAI not configured");
+            console.log("🔊 Transcribing with OpenAI", { model: OPENAI_TRANSCRIBE_MODEL });
+            const ext = path.extname(key) || '.webm';
+            const namedFile = await toFile(audioBuffer, `upload${ext}`);
+            const oaRes = await openai.audio.transcriptions.create({
+                file: namedFile,
+                model: OPENAI_TRANSCRIBE_MODEL,
+                response_format: "text"
+            });
+            transcript = oaRes;
+        }
+        console.log("✅ Transcript ready", { provider: TRANSCRIPTION_PROVIDER, transcriptLength: transcript?.length || 0 });
+        
+        const macros = await db.getMacros(req.session.userId);
+        console.log("🤖 Generating prescription HTML", { model: SCRIBE_MODEL, macros: macros?.length || 0, contextLength: (context || "").length });
+        const model = genAI.getGenerativeModel({ model: SCRIBE_MODEL });
+        const prompt = generateScribePrompt(transcript, context || "", macros);
+        const aiRes = await model.generateContent(prompt);
+        
+        const newCredits = await db.getCredits(req.session.userId);
+        console.log("📤 /api/process-s3 complete", { userId: req.session.userId, credits: newCredits });
+        res.json({ success: true, html: sanitizeContent(cleanAI(aiRes.response.text())), credits: newCredits });
+
+    } catch (e) {
+        console.error("process-s3 error:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // --- 3. BACKUP UPLOAD ENDPOINT ---
