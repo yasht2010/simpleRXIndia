@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" width="900" height="420" font-family="Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937" />
+    </marker>
+    <style>
+      .box { fill:#f8fafc; stroke:#1f2937; stroke-width:1.4; rx:8; ry:8; }
+      .label { font-size:14px; fill:#0f172a; font-weight:bold; }
+      .sublabel { font-size:12px; fill:#475569; }
+      .arrow { stroke:#1f2937; stroke-width:1.6; marker-end:url(#arrow); fill:none; }
+      .note { font-size:12px; fill:#111827; font-weight:600; }
+    </style>
+  </defs>
+
+  <!-- Nodes -->
+  <rect class="box" x="70" y="80" width="170" height="70" />
+  <text x="155" y="110" text-anchor="middle" class="label">Browser</text>
+  <text x="155" y="130" text-anchor="middle" class="sublabel">pendingHtml</text>
+
+  <rect class="box" x="360" y="80" width="200" height="70" />
+  <text x="460" y="110" text-anchor="middle" class="label">Express server.js</text>
+  <text x="460" y="130" text-anchor="middle" class="sublabel">/api/review</text>
+
+  <rect class="box" x="650" y="80" width="170" height="70" />
+  <text x="735" y="110" text-anchor="middle" class="label">LLM</text>
+  <text x="735" y="130" text-anchor="middle" class="sublabel">runLlmTask('review')</text>
+
+  <line class="arrow" x1="240" y1="115" x2="360" y2="115" />
+  <text class="note" x="300" y="105" text-anchor="middle">POST /api/review {html}</text>
+
+  <line class="arrow" x1="560" y1="115" x2="650" y2="115" />
+  <text class="note" x="605" y="105" text-anchor="middle">prompt</text>
+
+  <line class="arrow" x1="650" y1="135" x2="560" y2="135" />
+  <text class="note" x="605" y="155" text-anchor="middle">reviewed HTML</text>
+
+  <line class="arrow" x1="360" y1="135" x2="240" y2="135" />
+  <text class="note" x="300" y="155" text-anchor="middle">{reviewed}</text>
+
+  <!-- Format pass -->
+  <rect class="box" x="70" y="260" width="170" height="70" />
+  <text x="155" y="290" text-anchor="middle" class="label">Browser</text>
+  <text x="155" y="310" text-anchor="middle" class="sublabel">autoFormat()</text>
+
+  <rect class="box" x="360" y="260" width="200" height="70" />
+  <text x="460" y="290" text-anchor="middle" class="label">Express server.js</text>
+  <text x="460" y="310" text-anchor="middle" class="sublabel">/api/format</text>
+
+  <rect class="box" x="650" y="260" width="170" height="70" />
+  <text x="735" y="290" text-anchor="middle" class="label">LLM</text>
+  <text x="735" y="310" text-anchor="middle" class="sublabel">responseSchema JSON</text>
+
+  <line class="arrow" x1="240" y1="295" x2="360" y2="295" />
+  <text class="note" x="300" y="285" text-anchor="middle">POST /api/format {html}</text>
+
+  <line class="arrow" x1="560" y1="295" x2="650" y2="295" />
+  <text class="note" x="605" y="285" text-anchor="middle">generate structured</text>
+
+  <line class="arrow" x1="650" y1="315" x2="560" y2="315" />
+  <text class="note" x="605" y="335" text-anchor="middle">{html, sections?}</text>
+
+  <line class="arrow" x1="360" y1="315" x2="240" y2="315" />
+  <text class="note" x="300" y="335" text-anchor="middle">formatted + structured</text>
+</svg>

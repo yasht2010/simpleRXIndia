@@ -48,10 +48,20 @@
                 <input id="loginPhone" placeholder="Phone Number" class="w-full bg-slate-50 border border-slate-300 p-3 rounded-md mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <input id="loginPass" type="password" placeholder="Password" class="w-full bg-slate-50 border border-slate-300 p-3 rounded-md mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <p id="loginError" class="text-xs text-rose-600 h-4 mb-2"></p>
-                <button onclick="login()" class="w-full bg-blue-800 hover:bg-blue-900 text-white py-3 rounded-lg font-semibold shadow transition-all">Login</button>
+                <button id="loginButton" onclick="login()" class="w-full bg-blue-800 hover:bg-blue-900 text-white py-3 rounded-lg font-semibold shadow transition-all">Login</button>
                 <div class="text-center text-xs text-slate-500 mt-4">
                     New here? <a href="/register" class="text-blue-800 font-semibold hover:underline">Create an account</a>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loginLoading" class="hidden fixed inset-0 z-50 bg-white/90 backdrop-blur-sm flex items-center justify-center">
+        <div class="bg-white border border-slate-200 shadow-2xl rounded-2xl px-6 py-5 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full border-4 border-blue-200 border-t-blue-800 animate-spin"></div>
+            <div>
+                <div class="text-sm font-semibold text-blue-900">Signing you in…</div>
+                <div class="text-xs text-slate-600">Please wait while we load your dashboard.</div>
             </div>
         </div>
     </div>
@@ -254,6 +264,25 @@
             <input id="in_reg" placeholder="Reg No" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
             <textarea id="in_clinic" placeholder="Clinic Address" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
             <input id="in_keywords" placeholder="Keywords (Brand names)" class="w-full bg-slate-50 border border-slate-300 p-3 mb-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <div class="mt-4 border-t border-slate-200 pt-4 space-y-3">
+                <div>
+                    <div class="flex items-center justify-between gap-2">
+                        <label class="text-sm font-semibold text-slate-800">Upload saved audio (quiet testing)</label>
+                        <button id="testUploadButton" onclick="triggerTestUpload()" class="text-xs text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-2 rounded-md shadow-sm transition">
+                            Choose file
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mt-1">Upload a saved audio or webm clip to process without speaking.</p>
+                    <input id="testAudioInput" type="file" accept="audio/*,video/webm" class="hidden" onchange="handleTestFile(this.files?.[0])">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-slate-800">
+                    <input id="structuredToggle" type="checkbox" class="h-4 w-4" onchange="setStructuredRendering(this.checked)">
+                    <div>
+                        <div class="font-semibold">Structured render (beta)</div>
+                        <p class="text-[11px] text-slate-500">Shows Rx in table format when available.</p>
+                    </div>
+                </label>
+            </div>
             <p id="settingsStatus" class="text-xs h-4 text-emerald-600 font-semibold"></p>
             <div class="flex justify-end gap-3 mt-4">
                 <button onclick="document.getElementById('settingsModal').classList.add('hidden')" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
@@ -313,6 +342,8 @@
         let modeLocked = false;
         let fontMenuOpen = false;
         let reviewEnabled = false;
+        let structuredRenderEnabled = true;
+        let currentCredits = 0;
         let pendingHtml = "";
         let savedHeaderHtml = "";
         let headerDirty = false;
@@ -320,19 +351,44 @@
         let currentFontFamily = "'Inter', sans-serif";
         let currentFontSize = "14px";
         let consentAction = 'print';
+        let testUploadInFlight = false;
+
+        function setLoginLoading(isLoading) {
+            const overlay = document.getElementById('loginLoading');
+            if (overlay) overlay.classList.toggle('hidden', !isLoading);
+        }
+
+        function setLoginPending(isPending) {
+            const inputs = [document.getElementById('loginPhone'), document.getElementById('loginPass'), document.getElementById('loginButton')];
+            inputs.forEach(el => {
+                if (!el) return;
+                el.disabled = isPending;
+                el.classList.toggle('opacity-70', isPending);
+                el.classList.toggle('cursor-not-allowed', isPending);
+            });
+        }
 
         // --- AUTH ---
         window.onload = initApp;
         async function login() {
             const phone = document.getElementById('loginPhone').value;
             const pass = document.getElementById('loginPass').value;
-            const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone, password: pass }) });
-            const data = await res.json();
-            if (data.success) {
-                document.getElementById('loginError').innerText = "";
-                window.location.href = '/dashboard';
-            } else {
-                document.getElementById('loginError').innerText = "Login failed. Check phone/password.";
+            setLoginPending(true);
+            try {
+                const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ phone, password: pass }) });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('loginError').innerText = "";
+                    setLoginPending(false);
+                    setLoginLoading(true);
+                    window.location.href = '/dashboard';
+                } else {
+                    document.getElementById('loginError').innerText = "Login failed. Check phone/password.";
+                    setLoginPending(false);
+                }
+            } catch (err) {
+                document.getElementById('loginError').innerText = "Login failed. Please try again.";
+                setLoginPending(false);
             }
         }
 
@@ -377,6 +433,12 @@
             if (savedReview !== null) {
                 setReviewEnabled(savedReview === 'true', true);
             }
+            const savedStructured = localStorage.getItem('structuredRenderEnabled');
+            if (savedStructured !== null) {
+                setStructuredRendering(savedStructured === 'true', true);
+            } else {
+                setStructuredRendering(true, true);
+            }
             const savedMode = localStorage.getItem('transcriptionMode');
             if (savedMode === 'live' || savedMode === 'offline') {
                 setMode(savedMode, true);
@@ -415,7 +477,12 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    document.getElementById('content').innerHTML = data.formatted;
+                    console.log("🧪 format response (client)", {
+                        hasStructured: Boolean(data.structured),
+                        sectionKeys: data.structured ? Object.keys(data.structured) : [],
+                        formattedPreview: (data.formatted || "").slice(0, 120)
+                    });
+                    document.getElementById('content').innerHTML = renderFormattedResult(data);
                     pendingHtml = "";
                     updateStatus("DONE", "text-green-600");
                 } else {
@@ -427,6 +494,55 @@
                 setRecordState('done');
                 modeLocked = false;
                 setTimeout(() => setRecordState('idle'), 1200);
+            }
+        }
+
+        function triggerTestUpload() {
+            if (testUploadInFlight || modeLocked) return;
+            const fileInput = document.getElementById('testAudioInput');
+            if (fileInput) fileInput.click();
+        }
+
+        async function handleTestFile(file) {
+            if (!file) return;
+            if (testUploadInFlight) return;
+            if (currentCredits <= 0) {
+                alert("No credits remaining. Please add Rx credits before uploading.");
+                return;
+            }
+            testUploadInFlight = true;
+            modeLocked = true;
+            setRecordState('processing');
+            updateStatus("Uploading test clip…", "text-blue-600");
+
+            const btn = document.getElementById('testUploadButton');
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-70', 'cursor-not-allowed');
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('audio', file);
+                formData.append('context', document.getElementById('placeholder') ? "" : document.getElementById('content').innerHTML);
+
+                const res = await fetch('/api/process-backup', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || "Processing failed");
+                handleResult(data);
+            } catch (err) {
+                updateStatus("Test upload failed", "text-red-500");
+                alert(err.message || "Test upload failed");
+                setRecordState('idle');
+                modeLocked = false;
+            } finally {
+                testUploadInFlight = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-70', 'cursor-not-allowed');
+                }
+                const fileInput = document.getElementById('testAudioInput');
+                if (fileInput) fileInput.value = "";
             }
         }
         function setHeaderStatus(text, colorClass = "text-emerald-600") {
@@ -515,10 +631,85 @@
         }
 
         function setCreditDisplay(value) {
+            currentCredits = Number(value) || 0;
             const primary = document.getElementById('creditDisplay');
             const secondary = document.getElementById('creditDisplayDesktop');
             if (primary) primary.innerText = value;
             if (secondary) secondary.innerText = value;
+        }
+
+        function renderFormattedResult(data) {
+            if (structuredRenderEnabled && data.structured) {
+                return renderStructuredHtml(data.structured, data.formatted);
+            }
+            return data.formatted || "";
+        }
+
+        function renderStructuredHtml(structured, fallbackHtml = "") {
+            if (!structured) return fallbackHtml || "";
+            const sections = [];
+            const wrapSection = (title, body) => {
+                if (!body) return;
+                sections.push(`<h3><b>${title}</b></h3><hr>${body}`);
+            };
+
+            const safeText = (text) => (text || "").toString().trim();
+            const normalizeRxRow = (row = {}) => {
+                const pick = (...keys) => keys.map(k => row[k]).find(Boolean) || "";
+                return {
+                    medicine: pick('medicine', 'Medicine', 'drug', 'Drug'),
+                    molecule: pick('molecule', 'Molecule', 'salt', 'Salt', 'composition', 'Composition'),
+                    dose: pick('dose', 'Dose', 'strength', 'Strength'),
+                    frequency: pick('frequency', 'Frequency', 'freq', 'Freq'),
+                    duration: pick('duration', 'Duration', 'days', 'Days')
+                };
+            };
+
+            const patient = safeText(structured.patientDetails);
+            wrapSection("Patient details", patient);
+
+            const dx = safeText(structured.diagnosis);
+            wrapSection("Diagnosis", dx);
+
+            if (structured.advice && Array.isArray(structured.advice) && structured.advice.length) {
+                const items = structured.advice.filter(Boolean).map(item => `<li>${item}</li>`).join('');
+                wrapSection("Advice", `<ul>${items}</ul>`);
+            }
+
+            if (structured.rx && Array.isArray(structured.rx) && structured.rx.length) {
+                const rowHasContent = (row = {}) => {
+                    return [row.medicine, row.molecule, row.dose, row.frequency, row.duration].some(v => safeText(v || ""));
+                };
+                const rows = structured.rx.map(normalizeRxRow).filter(rowHasContent).map(row => {
+                    const m = safeText(row.medicine);
+                    const mol = safeText(row.molecule);
+                    const dose = safeText(row.dose);
+                    const freq = safeText(row.frequency);
+                    const dur = safeText(row.duration);
+                    const cellStyle = "border:1px solid #cbd5e1; padding:6px; text-align:left;";
+                    return `<tr><td style="${cellStyle}"><b>${m}</b></td><td style="${cellStyle}">${mol}</td><td style="${cellStyle}">${dose}</td><td style="${cellStyle}">${freq}</td><td style="${cellStyle}">${dur}</td></tr>`;
+                }).join('');
+                if (rows) {
+                    const headCell = "border:1px solid #cbd5e1; padding:6px; text-align:left; font-weight:700;";
+                    const table = `
+                    <table style="width:100%; border:1px solid #cbd5e1; border-collapse:collapse;">
+                        <thead>
+                            <tr>
+                                <th style="${headCell}">Medicine</th>
+                                <th style="${headCell}">Molecule</th>
+                                <th style="${headCell}">Dose</th>
+                                <th style="${headCell}">Frequency</th>
+                                <th style="${headCell}">Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>`;
+                    wrapSection("Rx", table);
+                }
+            }
+
+            if (!sections.length) return fallbackHtml || "";
+            return sections.join('\n');
         }
 
         function setMode(mode, skipPersist = false) {
@@ -539,6 +730,13 @@
             }
             closeModeMenu();
             if (!skipPersist) localStorage.setItem('transcriptionMode', transcriptionMode);
+        }
+
+        function setStructuredRendering(enabled, skipPersist = false) {
+            structuredRenderEnabled = enabled;
+            const toggle = document.getElementById('structuredToggle');
+            if (toggle) toggle.checked = enabled;
+            if (!skipPersist) localStorage.setItem('structuredRenderEnabled', String(enabled));
         }
 
         function toggleModeMenu() {
@@ -814,16 +1012,13 @@
             stopWaveform();
             if (data.success) {
                 setCreditDisplay(data.credits);
+                pendingHtml = data.html;
                 if (reviewEnabled) {
-                    pendingHtml = data.html;
                     updateStatus("AI review in progress…", "text-blue-600");
                     autoReview();
                 } else {
-                    document.getElementById('content').innerHTML = data.html;
-                    updateStatus("DONE", "text-green-600");
-                    setRecordState('done');
-                    modeLocked = false;
-                    setTimeout(() => setRecordState('idle'), 1200);
+                    updateStatus("Formatting...", "text-blue-600");
+                    autoFormat();
                 }
             } else {
                 alert(data.error);
@@ -836,6 +1031,10 @@
         // --- RECORDING (Native Streaming) ---
         async function startRecording() {
             if (isRecording || recordState === 'processing') return;
+            if (currentCredits <= 0) {
+                updateStatus("No credits remaining. Please add Rx credits.", "text-red-500");
+                return;
+            }
             transcriptBuffer = "";
             backupAudioChunks = [];
             elapsedSeconds = 0;
@@ -988,6 +1187,12 @@
 
         // --- BACKUP UPLOAD ---
         async function uploadBackup() {
+            if (currentCredits <= 0) {
+                alert("No credits remaining. Please add Rx credits before uploading.");
+                setRecordState('idle');
+                modeLocked = false;
+                return;
+            }
             const blob = new Blob(backupAudioChunks, { type: recordedMimeType });
             try {
                 // 1. Get presigned URL

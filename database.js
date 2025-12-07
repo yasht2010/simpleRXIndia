@@ -188,6 +188,38 @@ export const removeUser = async (userId) => {
     return true;
 };
 
+// --- ADMIN PROVIDER SETTINGS ---
+const PROVIDER_TABLE = 'provider_settings';
+
+export const getProviderSettings = async () => {
+    const { data, error } = await supabase
+        .from(PROVIDER_TABLE)
+        .select('key, value');
+    
+    if (error) {
+        // Table might not exist yet; return empty overrides instead of crashing
+        if (error.code === '42P01' || error.code === 'PGRST116') {
+            return {};
+        }
+        throw error;
+    }
+
+    const out = {};
+    (data || []).forEach(row => { out[row.key] = row.value; });
+    return out;
+};
+
+export const saveProviderSettings = async (settings = {}) => {
+    const entries = Object.entries(settings).filter(([, v]) => v !== undefined && v !== null && v !== '');
+    if (!entries.length) return true;
+    const payload = entries.map(([key, value]) => ({ key, value: String(value) }));
+    const { error } = await supabase
+        .from(PROVIDER_TABLE)
+        .upsert(payload, { onConflict: 'key' });
+    if (error) throw error;
+    return true;
+};
+
 // --- MACRO FUNCTIONS ---
 
 export const getMacros = async (userId) => {

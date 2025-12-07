@@ -22,19 +22,68 @@
                 <h2 class="text-lg font-semibold">Users</h2>
                 <button onclick="logout()" class="text-sm text-red-600 underline">Logout</button>
             </div>
-            <div class="bg-white border rounded-lg shadow p-4">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
-                        <thead class="bg-gray-100 text-left">
-                            <tr>
-                                <th class="p-2">Phone</th>
-                                <th class="p-2">Details</th>
-                                <th class="p-2">Prescriptions</th>
-                                <th class="p-2">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="userRows"></tbody>
-                    </table>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="bg-white border rounded-lg shadow p-4">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-100 text-left">
+                                <tr>
+                                    <th class="p-2">Phone</th>
+                                    <th class="p-2">Details</th>
+                                    <th class="p-2">Prescriptions</th>
+                                    <th class="p-2">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userRows"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-white border rounded-lg shadow p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-semibold text-slate-800">Provider Settings</h3>
+                        <span id="providerStatus" class="text-xs text-emerald-600 h-4"></span>
+                    </div>
+                    <p class="text-xs text-slate-500">Choose providers for transcription (live/offline) and LLM tasks. Changes apply to all future uploads/recordings.</p>
+                    <div class="space-y-2 text-sm">
+                        <label class="block">Live transcription
+                            <select id="liveTranscription" class="w-full border rounded p-2 mt-1">
+                                <option value="deepgram">Deepgram</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="groq">Groq</option>
+                            </select>
+                        </label>
+                        <label class="block">Offline transcription
+                            <select id="offlineTranscription" class="w-full border rounded p-2 mt-1">
+                                <option value="deepgram">Deepgram</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="groq">Groq</option>
+                            </select>
+                        </label>
+                        <label class="block">Scribe provider
+                            <select id="scribeProvider" class="w-full border rounded p-2 mt-1">
+                                <option value="gemini">Gemini</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="groq">Groq</option>
+                            </select>
+                        </label>
+                        <label class="block">Format provider
+                            <select id="formatProvider" class="w-full border rounded p-2 mt-1">
+                                <option value="gemini">Gemini</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="groq">Groq</option>
+                            </select>
+                        </label>
+                        <label class="block">Reviewer provider
+                            <select id="reviewProvider" class="w-full border rounded p-2 mt-1">
+                                <option value="gemini">Gemini</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="groq">Groq</option>
+                            </select>
+                        </label>
+                    </div>
+                    <button onclick="saveProviders()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">Save providers</button>
+                    <p id="providerResolved" class="text-[11px] text-slate-500"></p>
                 </div>
             </div>
         </div>
@@ -52,6 +101,7 @@
                 document.getElementById('loginBlock').classList.add('hidden');
                 document.getElementById('panelBlock').classList.remove('hidden');
                 loadUsers();
+                loadProviders();
             } else {
                 const data = await res.json();
                 document.getElementById('loginStatus').innerText = data.error || 'Login failed';
@@ -108,6 +158,72 @@
             await fetch('/api/admin/logout', { method: 'POST' });
             document.getElementById('panelBlock').classList.add('hidden');
             document.getElementById('loginBlock').classList.remove('hidden');
+        }
+
+        function setProviderStatus(text, color = 'text-emerald-600') {
+            const el = document.getElementById('providerStatus');
+            if (!el) return;
+            el.className = `text-xs ${color} h-4`;
+            el.innerText = text || '';
+        }
+
+        function fillSelect(id, value, fallback) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.value = value || fallback || el.value;
+        }
+
+        async function loadProviders() {
+            try {
+                const res = await fetch('/api/admin/providers');
+                if (!res.ok) throw new Error('Failed to load providers');
+                const data = await res.json();
+                const { overrides = {}, resolved = {} } = data;
+                fillSelect('liveTranscription', overrides.liveTranscription, resolved.liveTranscription?.provider);
+                fillSelect('offlineTranscription', overrides.offlineTranscription, resolved.offlineTranscription?.provider);
+                fillSelect('scribeProvider', overrides.scribeProvider, resolved.scribe?.provider);
+                fillSelect('formatProvider', overrides.formatProvider, resolved.format?.provider);
+                fillSelect('reviewProvider', overrides.reviewProvider, resolved.review?.provider);
+
+                const summary = [
+                    `Live: ${overrides.liveTranscription || resolved.liveTranscription?.provider}`,
+                    `Offline: ${overrides.offlineTranscription || resolved.offlineTranscription?.provider}`,
+                    `Scribe: ${overrides.scribeProvider || resolved.scribe?.provider}`,
+                    `Format: ${overrides.formatProvider || resolved.format?.provider}`,
+                    `Review: ${overrides.reviewProvider || resolved.review?.provider}`
+                ].join(' • ');
+                const resolvedEl = document.getElementById('providerResolved');
+                if (resolvedEl) resolvedEl.innerText = `Current: ${summary}`;
+                setProviderStatus('');
+            } catch (e) {
+                setProviderStatus(e.message || 'Load failed', 'text-red-600');
+            }
+        }
+
+        async function saveProviders() {
+            try {
+                setProviderStatus('Saving...', 'text-blue-600');
+                const payload = {
+                    liveTranscription: document.getElementById('liveTranscription')?.value,
+                    offlineTranscription: document.getElementById('offlineTranscription')?.value,
+                    scribeProvider: document.getElementById('scribeProvider')?.value,
+                    formatProvider: document.getElementById('formatProvider')?.value,
+                    reviewProvider: document.getElementById('reviewProvider')?.value
+                };
+                const res = await fetch('/api/admin/providers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Save failed');
+                }
+                setProviderStatus('Saved', 'text-emerald-600');
+                loadProviders();
+            } catch (e) {
+                setProviderStatus(e.message || 'Save failed', 'text-red-600');
+            }
         }
     </script>
 </body>

@@ -1,9 +1,11 @@
 # simpleRXIndia
+
 AI based prescription service for Indian doctors
 
 ## Supabase migration (SQLite → Postgres)
 
 1) Provision Supabase (free tier is fine) and grab:
+
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_DB_URL` (Database connection string from Project Settings → Database → Connection info). Keep `?pgbouncer=true` off; the raw `postgresql://...` works best for the session store.
@@ -73,6 +75,63 @@ S3_CLEANUP_MAX_AGE_HOURS=24 # optional; S3 cleanup runs every 3 hours
 ```
 
 Existing SQLite file `smartrx.db` is no longer used.
+
+## AI provider & model configuration
+
+These variables let you swap transcription and LLM providers without touching code. Defaults are in parentheses.
+
+**Transcription (live/offline)**
+
+- `TRANSCRIPTION_LIVE_PROVIDER` (`deepgram`) – streaming only supported for Deepgram; others fall back to upload.
+- `TRANSCRIPTION_OFFLINE_PROVIDER` (`deepgram`) – used for uploaded/backup audio.
+- Deepgram: `DEEPGRAM_TRANSCRIPTION_MODEL` (`nova-2-medical`), `DEEPGRAM_TRANSCRIPTION_LANGUAGE` (`en-IN`), `DEEPGRAM_API_KEY`.
+- Groq: `GROQ_TRANSCRIPTION_MODEL` (`whisper-large-v3-turbo`), `GROQ_API_KEY`.
+- OpenAI: `OPENAI_TRANSCRIBE_MODEL` (`gpt-4o-transcribe`), `OPENAI_API_KEY`.
+
+**Scribe/Format/Review providers**
+
+- `SCRIBE_PROVIDER` (`gemini`), `FORMAT_PROVIDER` (`gemini`), `REVIEW_PROVIDER` (`openai`).
+- Optional model overrides: `SCRIBE_MODEL`, `FORMAT_MODEL`, `REVIEW_MODEL` (defaults depend on provider: Gemini `gemini-2.5-flash`, OpenAI `gpt-5-mini` for scribe/format, `gpt-5` for review, Groq `llama-3.3-70b-versatile`).
+- Provider API keys: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`.
+
+Notes:
+
+- Set providers to `gemini`, `openai`, or `groq`. If a model override is absent, the default for that provider is used.
+- Live transcription with non-Deepgram providers will auto-route to the offline (upload) path.
+
+## Formatter schema output
+
+The formatter returns both print-ready HTML and an optional structured object when the provider supports JSON schemas (Gemini and OpenAI with `response_format=json`). Groq returns JSON when the model behaves, but schema enforcement is best with Gemini/OpenAI.
+
+**Provider to use**
+
+- Set `FORMAT_PROVIDER` to `gemini` (best schema fidelity) or `openai`. For Gemini, make sure `GEMINI_API_KEY` is set; for OpenAI, set `OPENAI_API_KEY`. Groq is supported but may not strictly enforce the schema.
+
+**Endpoint**
+
+- `POST /api/format` with `{ html: "<raw prescription html>" }`.
+- Response: `{ success, formatted, structured }`
+  - `formatted`: sanitized, print-ready HTML.
+  - `structured`: optional parsed object (`patientDetails`, `diagnosis`, `advice` array, `rx` array of medicine objects).
+
+**Client usage example**
+
+```js
+const res = await fetch('/api/format', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ html: sourceHtml })
+});
+const data = await res.json();
+if (!data.success) throw new Error(data.error);
+// Render HTML:
+document.getElementById('content').innerHTML = data.formatted;
+// Or consume structured data if present:
+if (data.structured) {
+  console.log('Patient:', data.structured.patientDetails);
+  console.log('Rx rows:', data.structured.rx);
+}
+```
 
 ## Optional: move existing data
 

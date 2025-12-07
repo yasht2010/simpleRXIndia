@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 520" width="1180" height="520" font-family="Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937" />
+    </marker>
+    <style>
+      .box { fill:#f8fafc; stroke:#1f2937; stroke-width:1.4; rx:8; ry:8; }
+      .label { font-size:14px; fill:#0f172a; font-weight:bold; }
+      .sublabel { font-size:12px; fill:#475569; }
+      .arrow { stroke:#1f2937; stroke-width:1.6; marker-end:url(#arrow); fill:none; }
+      .note { font-size:12px; fill:#111827; font-weight:600; }
+    </style>
+  </defs>
+
+  <!-- Top row: presign and upload -->
+  <rect class="box" x="70" y="70" width="190" height="70" />
+  <text x="165" y="100" text-anchor="middle" class="label">Browser</text>
+  <text x="165" y="120" text-anchor="middle" class="sublabel">offline clip</text>
+
+  <rect class="box" x="360" y="70" width="200" height="70" />
+  <text x="460" y="100" text-anchor="middle" class="label">Express server.js</text>
+  <text x="460" y="120" text-anchor="middle" class="sublabel">/api/upload-url</text>
+
+  <rect class="box" x="670" y="70" width="190" height="70" />
+  <text x="765" y="100" text-anchor="middle" class="label">S3 bucket</text>
+  <text x="765" y="120" text-anchor="middle" class="sublabel">presigned URL</text>
+
+  <line class="arrow" x1="260" y1="105" x2="360" y2="105" />
+  <text class="note" x="310" y="95" text-anchor="middle">POST /api/upload-url</text>
+
+  <line class="arrow" x1="560" y1="105" x2="670" y2="105" />
+  <text class="note" x="615" y="95" text-anchor="middle">{url, key}</text>
+
+  <line class="arrow" x1="670" y1="125" x2="560" y2="125" />
+  <text class="note" x="615" y="145" text-anchor="middle">PUT audio blob</text>
+
+  <line class="arrow" x1="360" y1="125" x2="260" y2="125" />
+  <text class="note" x="310" y="145" text-anchor="middle">upload complete</text>
+
+  <!-- Processing row -->
+  <rect class="box" x="70" y="300" width="190" height="70" />
+  <text x="165" y="330" text-anchor="middle" class="label">Browser</text>
+  <text x="165" y="350" text-anchor="middle" class="sublabel">POST /api/process-s3</text>
+
+  <rect class="box" x="360" y="300" width="200" height="70" />
+  <text x="460" y="330" text-anchor="middle" class="label">Express server.js</text>
+  <text x="460" y="350" text-anchor="middle" class="sublabel">deduct credit</text>
+
+  <rect class="box" x="670" y="300" width="190" height="70" />
+  <text x="765" y="330" text-anchor="middle" class="label">Transcribe</text>
+  <text x="765" y="350" text-anchor="middle" class="sublabel">Deepgram/OpenAI/Groq</text>
+
+  <rect class="box" x="930" y="300" width="190" height="70" />
+  <text x="1025" y="330" text-anchor="middle" class="label">LLM</text>
+  <text x="1025" y="350" text-anchor="middle" class="sublabel">scribe prompt</text>
+
+  <line class="arrow" x1="260" y1="335" x2="360" y2="335" />
+  <text class="note" x="310" y="325" text-anchor="middle">key + context</text>
+
+  <line class="arrow" x1="560" y1="320" x2="670" y2="320" />
+  <text class="note" x="615" y="310" text-anchor="middle">GetObject(key)</text>
+
+  <line class="arrow" x1="560" y1="350" x2="670" y2="350" />
+  <text class="note" x="615" y="370" text-anchor="middle">audio buffer → transcript</text>
+
+  <line class="arrow" x1="860" y1="335" x2="930" y2="335" />
+  <text class="note" x="895" y="325" text-anchor="middle">transcript</text>
+
+  <line class="arrow" x1="930" y1="355" x2="860" y2="355" />
+  <text class="note" x="895" y="375" text-anchor="middle">html</text>
+
+  <line class="arrow" x1="560" y1="355" x2="260" y2="355" />
+  <text class="note" x="410" y="375" text-anchor="middle">response {html, credits}</text>
+
+  <text class="note" x="165" y="400" text-anchor="middle">Optional: autoReview() → autoFormat()</text>
+</svg>

@@ -56,16 +56,20 @@ ${prescriptionHtml}
 
 export const generateFormatPrompt = (prescriptionHtml) => {
     return `
-You are a precise formatter. Take the prescription HTML and beautify it:
-- Keep sections like Patient details, Diagnosis, Rx, Advice with clear headings.
-- Render medicines in clean tables (columns: Medicine, Molecule, Dose, Frequency, Duration).
-- Use bullet points where appropriate for advice or instructions.
-- Do NOT add commentary or notes—return only the formatted prescription ready to print.
-- Use <h3><b>Section</b></h3> headings only when there is content for that section, and place an <hr> immediately after each heading with content on the next line.
-- Please also add spacing above the header to ensure the headings are clear and readable.
-- Tables must have borders on table and cells, padded cells, and bold column headers for a professional layout.
+You are a precise formatter. Normalize the prescription into the formatter schema and produce clean HTML.
 
-PRESCRIPTION HTML:
+Populate the schema fields as follows:
+- html: print-ready HTML that respects the rules below.
+- sections: fill patientDetails, diagnosis, advice (array of bullet lines), and rx (array of medicine objects) when that information is present; leave fields empty when absent.
+
+HTML rules (apply to the html field only):
+- Sections: Patient details, Diagnosis, Rx, Advice. Include a heading only when that section has content. Use <h3><b>Section</b></h3> then an <hr> and put content on the next line.
+- Tables: For Rx, render a table with columns Medicine, Molecule, Dose, Frequency, Duration. Border around table/cells, padded cells, bold headers, <tbody><tr><td> rows only.
+- Medicines: Bold the brand name in the Medicine column; keep brand names exactly as dictated.
+- Advice: Use bullet points when multiple items exist.
+- No extra notes, comments, or warnings. Return the object matching the schema; do not wrap in code fences.
+
+PRESCRIPTION HTML (source to normalize):
 ${prescriptionHtml}
 `;
 };
