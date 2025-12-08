@@ -1,17 +1,43 @@
-# simpleRXIndia
+# Clinova Rx (Smart-RX India)
 
-AI based prescription service for Indian doctors
+Voice-first prescription builder for Indian doctors. Streams dictation to Deepgram, runs scribe/review/format with Gemini/OpenAI/Groq, and returns print-ready HTML and structured Rx data.
 
-## Supabase migration (SQLite → Postgres)
+## What it does
+- Live scribing with Socket.IO + Deepgram (fallback to upload-and-process).
+- AI scribe → review → format pipeline with schema-enforced outputs.
+- Macros/protocols, custom doctor header, and printable prescriptions.
+- Admin console for users/credits and provider overrides.
+- S3 presigned uploads with optional cleanup for stale audio.
 
-1) Provision Supabase (free tier is fine) and grab:
+## Architecture
+- **Backend:** Express + Socket.IO (`server.js`), Helmet + rate limiting, session-backed auth via Supabase Postgres (`connect-pg-simple`).
+- **Frontend:** Static Tailwind pages in `public/` for login/register/dashboard/admin.
+- **Data:** Supabase Postgres for users/macros/provider settings/session, optional local `logs/format.log` for formatter traces.
+- **External providers:** Deepgram (live/offline transcription), Gemini/OpenAI/Groq for LLM tasks, AWS S3 for audio blobs.
+- See `ARCHITECTURE.md` and `docs/diagrams/*.svg` for flow diagrams.
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SUPABASE_DB_URL` (Database connection string from Project Settings → Database → Connection info). Keep `?pgbouncer=true` off; the raw `postgresql://...` works best for the session store.
+## Privacy (summary)
+- External services (Deepgram, Gemini/OpenAI/Groq, Supabase, S3) receive audio/text; do not process PHI unless you have compliance clearance and agreements with those providers.
+- Configure HTTPS, strong secrets, and access controls before handling real data.
+- Clear runtime artifacts (`uploads/`, `logs/`, `smartrx.db`, `.env`) before sharing builds; set your own retention policy in production.
+- See `PRIVACY.md` to adjust the notice for your deployment.
 
-2) Create tables/functions in the Supabase SQL editor:
+## Requirements
+- Node.js 20+
+- Supabase project (URL, Service Role key, and Postgres connection string for session storage)
+- AWS S3 bucket + credentials (or compatible S3 API)
+- Provider API keys: Deepgram (live transcription), Gemini and/or OpenAI, optional Groq
+- Modern browser with mic access (for live streaming)
 
+## Setup
+1) Install dependencies:
+```
+npm install
+```
+
+2) Create `.env` from `.env.example` and fill in real values (see variables below).
+
+3) Provision Supabase tables/functions in the SQL editor:
 ```sql
 -- users
 create table if not exists public.users (
@@ -61,85 +87,30 @@ begin
 end;
 $$;
 ```
+`connect-pg-simple` will auto-create the `session` table on first boot using `SUPABASE_DB_URL`.
 
-`connect-pg-simple` will auto-create a `session` table on first boot using the DB connection string (Supabase grants table creation to the `postgres` user used by `SUPABASE_DB_URL`). If you prefer manual creation, run `CREATE TABLE IF NOT EXISTS public.session (...)` using the template from the package docs.
-
-3) Environment variables (`.env`):
-
+4) Run locally:
 ```
-SUPABASE_URL=<your supabase url>
-SUPABASE_SERVICE_ROLE_KEY=<service role key>
-SUPABASE_DB_URL=<postgres connection string for sessions>
-SESSION_SECRET=<random string>
-S3_CLEANUP_MAX_AGE_HOURS=24 # optional; S3 cleanup runs every 3 hours
+PORT=3000 npm start
 ```
+Open `http://localhost:3000` and log in. Admin console is at `/admin.html`.
 
-Existing SQLite file `smartrx.db` is no longer used.
+## Environment variables (key ones)
+- **Core:** `PORT`, `ADMIN_USER`, `ADMIN_PASS`, `ADMIN_PASSCODE`, `REGISTRATION_OTP`, `SESSION_SECRET`.
+- **Supabase:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` (used for session store).
+- **S3:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`, `S3_CLEANUP_MAX_AGE_HOURS` (hours; cleanup runs every 3 hours).
+- **Providers:** `DEEPGRAM_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, optional `GROQ_API_KEY`.
+- **Provider/model overrides:** `TRANSCRIPTION_LIVE_PROVIDER`, `TRANSCRIPTION_OFFLINE_PROVIDER`, `SCRIBE_PROVIDER`, `FORMAT_PROVIDER`, `REVIEW_PROVIDER`, plus `*_MODEL` overrides. Defaults live in `services/providerConfig.js`.
 
-## AI provider & model configuration
+## Data and security notes
+- Keep `.env`, `smartrx.db`, `uploads/`, and `logs/` out of git and out of public builds. Rotate any keys already committed elsewhere.
+- Clear or anonymize any local SQLite data (`smartrx.db`) and uploaded audio before publishing.
+- Change default admin credentials/passcodes in production.
+- TLS terminate in front of the app; sessions are cookie-based with `secure` enabled in production.
+- Review HIPAA/NMC/clinic policies before handling real patient data; this code ships without compliance guarantees.
 
-These variables let you swap transcription and LLM providers without touching code. Defaults are in parentheses.
-
-**Transcription (live/offline)**
-
-- `TRANSCRIPTION_LIVE_PROVIDER` (`deepgram`) – streaming only supported for Deepgram; others fall back to upload.
-- `TRANSCRIPTION_OFFLINE_PROVIDER` (`deepgram`) – used for uploaded/backup audio.
-- Deepgram: `DEEPGRAM_TRANSCRIPTION_MODEL` (`nova-2-medical`), `DEEPGRAM_TRANSCRIPTION_LANGUAGE` (`en-IN`), `DEEPGRAM_API_KEY`.
-- Groq: `GROQ_TRANSCRIPTION_MODEL` (`whisper-large-v3-turbo`), `GROQ_API_KEY`.
-- OpenAI: `OPENAI_TRANSCRIBE_MODEL` (`gpt-4o-transcribe`), `OPENAI_API_KEY`.
-
-**Scribe/Format/Review providers**
-
-- `SCRIBE_PROVIDER` (`gemini`), `FORMAT_PROVIDER` (`gemini`), `REVIEW_PROVIDER` (`openai`).
-- Optional model overrides: `SCRIBE_MODEL`, `FORMAT_MODEL`, `REVIEW_MODEL` (defaults depend on provider: Gemini `gemini-2.5-flash`, OpenAI `gpt-5-mini` for scribe/format, `gpt-5` for review, Groq `llama-3.3-70b-versatile`).
-- Provider API keys: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`.
-
-Notes:
-
-- Set providers to `gemini`, `openai`, or `groq`. If a model override is absent, the default for that provider is used.
-- Live transcription with non-Deepgram providers will auto-route to the offline (upload) path.
-
-## Formatter schema output
-
-The formatter returns both print-ready HTML and an optional structured object when the provider supports JSON schemas (Gemini and OpenAI with `response_format=json`). Groq returns JSON when the model behaves, but schema enforcement is best with Gemini/OpenAI.
-
-**Provider to use**
-
-- Set `FORMAT_PROVIDER` to `gemini` (best schema fidelity) or `openai`. For Gemini, make sure `GEMINI_API_KEY` is set; for OpenAI, set `OPENAI_API_KEY`. Groq is supported but may not strictly enforce the schema.
-
-**Endpoint**
-
-- `POST /api/format` with `{ html: "<raw prescription html>" }`.
-- Response: `{ success, formatted, structured }`
-  - `formatted`: sanitized, print-ready HTML.
-  - `structured`: optional parsed object (`patientDetails`, `diagnosis`, `advice` array, `rx` array of medicine objects).
-
-**Client usage example**
-
-```js
-const res = await fetch('/api/format', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ html: sourceHtml })
-});
-const data = await res.json();
-if (!data.success) throw new Error(data.error);
-// Render HTML:
-document.getElementById('content').innerHTML = data.formatted;
-// Or consume structured data if present:
-if (data.structured) {
-  console.log('Patient:', data.structured.patientDetails);
-  console.log('Rx rows:', data.structured.rx);
-}
-```
-
-## Optional: move existing data
-
-Export from SQLite and import into Supabase:
-
-```
-sqlite3 smartrx.db ".headers on" ".mode csv" "select * from users;" > users.csv
-sqlite3 smartrx.db ".headers on" ".mode csv" "select * from macros;" > macros.csv
-```
-
-Then use Supabase Table Editor → Import Data (CSV) for `users` and `macros`. Ensure the column order matches the table definitions above.
+## Docs
+- `ARCHITECTURE.md` – components and data flows.
+- `docs/diagrams/*.svg` – rendered diagrams for auth/scribing/formatting.
+- `PUBLIC_RELEASE_CHECKLIST.md` – quick audit before making the repo public.
+- `PRIVACY.md` – brief privacy statement to customize for your deployment.
