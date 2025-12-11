@@ -24,6 +24,17 @@ Voice-first prescription builder for Indian doctors. Streams dictation to Deepgr
 - **Node proxy**: `server.js` proxies `/api/medicine-suggest` and `/api/medicine-validate` to the sidecar (`MEDICINE_SERVICE_BASE`, default `http://127.0.0.1:8000`) with timeouts and result normalization.
 - **UI wiring**: the formatted Rx table in `public/index.html` makes medicine names clickable; a popover typeahead calls the proxy endpoints, supports keyboard navigation, and updates the medicine name + molecule columns inline without persisting server state.
 
+Run the sidecar locally
+
+```
+# in the repo root
+uvicorn search_engine:app --host 0.0.0.0 --port 8000
+```
+
+Notes:
+- `indian_medicine_data.csv` must be present (already in the repo).
+- If you change host/port, set `MEDICINE_SERVICE_BASE` for the Node app (e.g., `MEDICINE_SERVICE_BASE=http://localhost:9000 npm start`).
+
 ## Privacy (summary)
 
 - External services (Deepgram, Gemini/OpenAI/Groq, Supabase, S3) receive audio/text; do not process PHI unless you have compliance clearance and agreements with those providers.
