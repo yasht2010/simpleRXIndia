@@ -3,6 +3,7 @@
 Voice-first prescription builder for Indian doctors. Streams dictation to Deepgram, runs scribe/review/format with Gemini/OpenAI/Groq, and returns print-ready HTML and structured Rx data.
 
 ## What it does
+
 - Live scribing with Socket.IO + Deepgram (fallback to upload-and-process).
 - AI scribe → review → format pipeline with schema-enforced outputs.
 - Macros/protocols, custom doctor header, and printable prescriptions.
@@ -10,19 +11,28 @@ Voice-first prescription builder for Indian doctors. Streams dictation to Deepgr
 - S3 presigned uploads with optional cleanup for stale audio.
 
 ## Architecture
+
 - **Backend:** Express + Socket.IO (`server.js`), Helmet + rate limiting, session-backed auth via Supabase Postgres (`connect-pg-simple`).
 - **Frontend:** Static Tailwind pages in `public/` for login/register/dashboard/admin.
 - **Data:** Supabase Postgres for users/macros/provider settings/session, optional local `logs/format.log` for formatter traces.
 - **External providers:** Deepgram (live/offline transcription), Gemini/OpenAI/Groq for LLM tasks, AWS S3 for audio blobs.
 - See `ARCHITECTURE.md` and `docs/diagrams/*.svg` for flow diagrams.
 
+### Medicine typeahead sidecar
+
+- **Python FastAPI sidecar** (`search_engine.py`): loads `indian_medicine_data.csv`, cleans/partitions brand/composition text, and exposes `/medicine-suggest` and `/medicine-validate` (returns `{id, brand, manufacturer, composition, mol1, mol2}`).
+- **Node proxy**: `server.js` proxies `/api/medicine-suggest` and `/api/medicine-validate` to the sidecar (`MEDICINE_SERVICE_BASE`, default `http://127.0.0.1:8000`) with timeouts and result normalization.
+- **UI wiring**: the formatted Rx table in `public/index.html` makes medicine names clickable; a popover typeahead calls the proxy endpoints, supports keyboard navigation, and updates the medicine name + molecule columns inline without persisting server state.
+
 ## Privacy (summary)
+
 - External services (Deepgram, Gemini/OpenAI/Groq, Supabase, S3) receive audio/text; do not process PHI unless you have compliance clearance and agreements with those providers.
 - Configure HTTPS, strong secrets, and access controls before handling real data.
 - Clear runtime artifacts (`uploads/`, `logs/`, `smartrx.db`, `.env`) before sharing builds; set your own retention policy in production.
 - See `PRIVACY.md` to adjust the notice for your deployment.
 
 ## Requirements
+
 - Node.js 20+
 - Supabase project (URL, Service Role key, and Postgres connection string for session storage)
 - AWS S3 bucket + credentials (or compatible S3 API)
@@ -30,14 +40,16 @@ Voice-first prescription builder for Indian doctors. Streams dictation to Deepgr
 - Modern browser with mic access (for live streaming)
 
 ## Setup
+
 1) Install dependencies:
+
 ```
 npm install
 ```
 
 2) Create `.env` from `.env.example` and fill in real values (see variables below).
-
 3) Provision Supabase tables/functions in the SQL editor:
+
 ```sql
 -- users
 create table if not exists public.users (
@@ -87,15 +99,19 @@ begin
 end;
 $$;
 ```
+
 `connect-pg-simple` will auto-create the `session` table on first boot using `SUPABASE_DB_URL`.
 
 4) Run locally:
+
 ```
 PORT=3000 npm start
 ```
+
 Open `http://localhost:3000` and log in. Admin console is at `/admin.html`.
 
 ## Environment variables (key ones)
+
 - **Core:** `PORT`, `ADMIN_USER`, `ADMIN_PASS`, `ADMIN_PASSCODE`, `REGISTRATION_OTP`, `SESSION_SECRET`.
 - **Supabase:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL` (used for session store).
 - **S3:** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`, `S3_CLEANUP_MAX_AGE_HOURS` (hours; cleanup runs every 3 hours).
@@ -103,13 +119,14 @@ Open `http://localhost:3000` and log in. Admin console is at `/admin.html`.
 - **Provider/model overrides:** `TRANSCRIPTION_LIVE_PROVIDER`, `TRANSCRIPTION_OFFLINE_PROVIDER`, `SCRIBE_PROVIDER`, `FORMAT_PROVIDER`, `REVIEW_PROVIDER`, plus `*_MODEL` overrides. Defaults live in `services/providerConfig.js`.
 
 ## Data and security notes
+
 - Keep `.env`, `smartrx.db`, `uploads/`, and `logs/` out of git and out of public builds. Rotate any keys already committed elsewhere.
-- Clear or anonymize any local SQLite data (`smartrx.db`) and uploaded audio before publishing.
 - Change default admin credentials/passcodes in production.
 - TLS terminate in front of the app; sessions are cookie-based with `secure` enabled in production.
 - Review HIPAA/NMC/clinic policies before handling real patient data; this code ships without compliance guarantees.
 
 ## Docs
+
 - `ARCHITECTURE.md` – components and data flows.
 - `docs/diagrams/*.svg` – rendered diagrams for auth/scribing/formatting.
 - `PUBLIC_RELEASE_CHECKLIST.md` – quick audit before making the repo public.

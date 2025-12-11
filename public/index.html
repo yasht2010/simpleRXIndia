@@ -15,6 +15,19 @@
         }
         #content table { width: 100%; max-width: 100%; table-layout: fixed; }
         #content th, #content td { word-break: break-word; }
+        .rx-medicine { cursor: pointer; position: relative; }
+        .rx-popover { position: absolute; background: white; border: 1px solid #e2e8f0; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12); border-radius: 12px; padding: 12px; width: min(360px, 90vw); z-index: 50; }
+        .rx-popover input { width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; }
+        .rx-suggestions { margin-top: 8px; max-height: 240px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+        .rx-suggestion { padding: 10px; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
+        .rx-suggestion:last-child { border-bottom: none; }
+        .rx-suggestion:hover, .rx-suggestion.active { background: #eef2ff; }
+        .rx-suggestion .name { font-weight: 700; color: #0f172a; }
+        .rx-suggestion .molecules { color: #475569; font-size: 13px; margin-top: 2px; }
+        .rx-suggestion .meta { color: #6b7280; font-size: 12px; }
+        .rx-empty { padding: 10px; color: #6b7280; text-align: center; }
+        .rx-foot { margin-top: 6px; font-size: 12px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; }
+        .rx-pill { padding: 4px 8px; background: #e0f2fe; color: #0369a1; border-radius: 999px; font-weight: 600; font-size: 12px; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen p-4 sm:p-6 md:p-8 font-sans text-slate-800 text-base leading-relaxed">
@@ -352,6 +365,11 @@
         let currentFontSize = "14px";
         let consentAction = 'print';
         let testUploadInFlight = false;
+        let rxPopoverEl = null;
+        let rxActiveTarget = null;
+        let rxSuggestResults = [];
+        let rxHighlightIndex = -1;
+        const RX_SUGGEST_DEBOUNCE_MS = 180;
 
         function setLoginLoading(isLoading) {
             const overlay = document.getElementById('loginLoading');
@@ -483,6 +501,7 @@
                         formattedPreview: (data.formatted || "").slice(0, 120)
                     });
                     document.getElementById('content').innerHTML = renderFormattedResult(data);
+                    attachRxEditing();
                     pendingHtml = "";
                     updateStatus("DONE", "text-green-600");
                 } else {
@@ -654,6 +673,7 @@
             };
 
             const safeText = (text) => (text || "").toString().trim();
+            const attrSafe = (text = "") => safeText(text).replace(/"/g, '&quot;');
             const normalizeRxRow = (row = {}) => {
                 const pick = (...keys) => keys.map(k => row[k]).find(Boolean) || "";
                 return {
@@ -683,11 +703,14 @@
                 const rows = structured.rx.map(normalizeRxRow).filter(rowHasContent).map(row => {
                     const m = safeText(row.medicine);
                     const mol = safeText(row.molecule);
+                    const mol1 = safeText(row.mol1 || row.molecule);
+                    const mol2 = safeText(row.mol2 || "");
+                    const molDisplay = [mol1, mol2].filter(Boolean).join(' + ') || mol;
                     const dose = safeText(row.dose);
                     const freq = safeText(row.frequency);
                     const dur = safeText(row.duration);
                     const cellStyle = "border:1px solid #cbd5e1; padding:6px; text-align:left;";
-                    return `<tr><td style="${cellStyle}"><b>${m}</b></td><td style="${cellStyle}">${mol}</td><td style="${cellStyle}">${dose}</td><td style="${cellStyle}">${freq}</td><td style="${cellStyle}">${dur}</td></tr>`;
+                    return `<tr class="rx-row"><td style="${cellStyle}"><span tabindex="0" class="rx-medicine underline decoration-dotted decoration-slate-400" data-mol1="${attrSafe(mol1)}" data-mol2="${attrSafe(mol2)}" data-id="">${m || 'Tap to edit'}</span></td><td class="rx-molecule-cell" style="${cellStyle}">${molDisplay}</td><td style="${cellStyle}">${dose}</td><td style="${cellStyle}">${freq}</td><td style="${cellStyle}">${dur}</td></tr>`;
                 }).join('');
                 if (rows) {
                     const headCell = "border:1px solid #cbd5e1; padding:6px; text-align:left; font-weight:700;";
@@ -696,7 +719,7 @@
                         <thead>
                             <tr>
                                 <th style="${headCell}">Medicine</th>
-                                <th style="${headCell}">Molecule</th>
+                                <th style="${headCell}">Molecule(s)</th>
                                 <th style="${headCell}">Dose</th>
                                 <th style="${headCell}">Frequency</th>
                                 <th style="${headCell}">Duration</th>
@@ -711,6 +734,200 @@
             if (!sections.length) return fallbackHtml || "";
             return sections.join('\n');
         }
+
+        function debounce(fn, delay = 150) {
+            let t;
+            return (...args) => {
+                clearTimeout(t);
+                t = setTimeout(() => fn(...args), delay);
+            };
+        }
+
+        const debouncedRxSuggest = debounce(async (value, listEl) => {
+            await loadRxSuggestions(value, listEl);
+        }, RX_SUGGEST_DEBOUNCE_MS);
+
+        function attachRxEditing() {
+            const meds = document.querySelectorAll('.rx-medicine');
+            meds.forEach(el => {
+                el.classList.add('hover:text-blue-700');
+                el.title = "Click to edit medicine name";
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openRxPopover(el);
+                });
+                el.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        openRxPopover(el);
+                    }
+                });
+            });
+        }
+
+        function closeRxPopover() {
+            if (rxPopoverEl && rxPopoverEl.parentNode) {
+                rxPopoverEl.parentNode.removeChild(rxPopoverEl);
+            }
+            rxPopoverEl = null;
+            rxActiveTarget = null;
+            rxSuggestResults = [];
+            rxHighlightIndex = -1;
+        }
+
+        function positionRxPopover(pop, target) {
+            const rect = target.getBoundingClientRect();
+            pop.style.top = `${rect.bottom + window.scrollY + 6}px`;
+            pop.style.left = `${rect.left + window.scrollX}px`;
+        }
+
+        async function fetchMedicineSuggest(q) {
+            const res = await fetch(`/api/medicine-suggest?q=${encodeURIComponent(q)}`);
+            if (!res.ok) throw new Error('suggest failed');
+            return res.json();
+        }
+
+        async function fetchMedicineValidate(q) {
+            const res = await fetch(`/api/medicine-validate?q=${encodeURIComponent(q)}`);
+            if (!res.ok) throw new Error('validate failed');
+            return res.json();
+        }
+
+        function renderRxSuggestions(listEl) {
+            if (!rxSuggestResults.length) {
+                listEl.innerHTML = '<div class="rx-empty">No results</div>';
+                rxHighlightIndex = -1;
+                return;
+            }
+            listEl.innerHTML = '';
+            rxSuggestResults.forEach((sugg, idx) => {
+                const div = document.createElement('div');
+                div.className = 'rx-suggestion' + (idx === rxHighlightIndex ? ' active' : '');
+                const molecules = [sugg.mol1, sugg.mol2].filter(Boolean).join(' • ') || (sugg.composition || '');
+                div.innerHTML = `
+                    <div class="name">${sugg.brand}</div>
+                    <div class="molecules">${molecules || 'No molecule info'}</div>
+                    <div class="meta">${sugg.manufacturer || ''}</div>
+                `;
+                div.addEventListener('mouseenter', () => {
+                    rxHighlightIndex = idx;
+                    syncRxHighlight(listEl);
+                });
+                div.addEventListener('click', () => {
+                    if (rxActiveTarget) applyRxSuggestion(rxActiveTarget, sugg);
+                });
+                listEl.appendChild(div);
+            });
+            rxHighlightIndex = 0;
+            syncRxHighlight(listEl);
+        }
+
+        function syncRxHighlight(listEl) {
+            [...listEl.children].forEach((child, i) => {
+                child.classList.toggle('active', i === rxHighlightIndex);
+            });
+        }
+
+        async function loadRxSuggestions(value, listEl) {
+            const q = (value || "").trim();
+            if (!q) {
+                listEl.innerHTML = '<div class="rx-empty">Start typing to see matches</div>';
+                rxSuggestResults = [];
+                rxHighlightIndex = -1;
+                return;
+            }
+            listEl.innerHTML = '<div class="rx-empty">Searching…</div>';
+            try {
+                rxSuggestResults = await fetchMedicineSuggest(q);
+                renderRxSuggestions(listEl);
+            } catch (err) {
+                listEl.innerHTML = '<div class="rx-empty">Could not fetch suggestions</div>';
+                rxSuggestResults = [];
+                rxHighlightIndex = -1;
+            }
+        }
+
+        function applyRxSuggestion(target, suggestion) {
+            if (!target) return;
+            target.textContent = suggestion.brand || target.textContent;
+            target.dataset.id = suggestion.id || "";
+            target.dataset.mol1 = suggestion.mol1 || "";
+            target.dataset.mol2 = suggestion.mol2 || "";
+            const row = target.closest('tr');
+            const moleculeCell = row ? row.querySelector('.rx-molecule-cell') : null;
+            const moleculeText = [suggestion.mol1, suggestion.mol2].filter(Boolean).join(' + ') || suggestion.composition || "";
+            if (moleculeCell) moleculeCell.textContent = moleculeText || '—';
+            closeRxPopover();
+        }
+
+        async function openRxPopover(target) {
+            closeRxPopover();
+            rxActiveTarget = target;
+            const pop = document.createElement('div');
+            pop.className = 'rx-popover';
+            pop.innerHTML = `
+                <input type="text" aria-label="Edit medicine name" value="${(target.textContent || '').trim()}">
+                <div class="rx-suggestions"><div class="rx-empty">Start typing to see matches</div></div>
+                <div class="rx-foot"><span class="rx-pill">Typeahead</span><span>Enter to select • Esc to close</span></div>
+            `;
+            document.body.appendChild(pop);
+            rxPopoverEl = pop;
+            positionRxPopover(pop, target);
+
+            const input = pop.querySelector('input');
+            const listEl = pop.querySelector('.rx-suggestions');
+
+            input.addEventListener('input', (e) => debouncedRxSuggest(e.target.value, listEl));
+            input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Escape') {
+                    closeRxPopover();
+                    return;
+                }
+                if (e.key === 'ArrowDown') {
+                    if (!rxSuggestResults.length) return;
+                    rxHighlightIndex = (rxHighlightIndex + 1) % rxSuggestResults.length;
+                    syncRxHighlight(listEl);
+                    e.preventDefault();
+                }
+                if (e.key === 'ArrowUp') {
+                    if (!rxSuggestResults.length) return;
+                    rxHighlightIndex = (rxHighlightIndex - 1 + rxSuggestResults.length) % rxSuggestResults.length;
+                    syncRxHighlight(listEl);
+                    e.preventDefault();
+                }
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (rxHighlightIndex >= 0 && rxSuggestResults[rxHighlightIndex]) {
+                        applyRxSuggestion(target, rxSuggestResults[rxHighlightIndex]);
+                        return;
+                    }
+                    try {
+                        const best = await fetchMedicineValidate(e.target.value);
+                        if (best && best.brand) applyRxSuggestion(target, best);
+                        else closeRxPopover();
+                    } catch (err) {
+                        closeRxPopover();
+                    }
+                }
+            });
+
+            debouncedRxSuggest(input.value, listEl);
+            input.focus();
+            input.select();
+        }
+
+        document.addEventListener('click', (e) => {
+            if (rxPopoverEl && !rxPopoverEl.contains(e.target) && (!rxActiveTarget || !rxActiveTarget.contains(e.target))) {
+                closeRxPopover();
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            if (rxPopoverEl && rxActiveTarget) positionRxPopover(rxPopoverEl, rxActiveTarget);
+        });
+        window.addEventListener('scroll', () => {
+            if (rxPopoverEl && rxActiveTarget) positionRxPopover(rxPopoverEl, rxActiveTarget);
+        }, true);
 
         function setMode(mode, skipPersist = false) {
             transcriptionMode = mode;
