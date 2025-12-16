@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node src/server.js",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.946.0",
@@ -24,5 +25,10 @@
     "sanitize-html": "^2.12.1",
     "socket.io": "^4.7.2",
     "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "jest": "^29.7.0",
+    "supertest": "^7.1.4"
   }
 }

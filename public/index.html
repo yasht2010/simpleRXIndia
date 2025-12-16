@@ -549,6 +549,8 @@
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || "Processing failed");
                 handleResult(data);
+                const settingsModal = document.getElementById('settingsModal');
+                if (settingsModal) settingsModal.classList.add('hidden');
             } catch (err) {
                 updateStatus("Test upload failed", "text-red-500");
                 alert(err.message || "Test upload failed");
