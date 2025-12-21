@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Clinova Rx</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
 <body class="bg-gray-50 text-slate-700">
     <div class="min-h-screen max-w-4xl mx-auto p-6">
         <h1 class="text-2xl font-bold text-blue-900 mb-4">Admin Panel</h1>
@@ -44,7 +46,8 @@
                         <h3 class="font-semibold text-slate-800">Provider Settings</h3>
                         <span id="providerStatus" class="text-xs text-emerald-600 h-4"></span>
                     </div>
-                    <p class="text-xs text-slate-500">Choose providers for transcription (live/offline) and LLM tasks. Changes apply to all future uploads/recordings.</p>
+                    <p class="text-xs text-slate-500">Choose providers for transcription (live/offline) and LLM tasks.
+                        Changes apply to all future uploads/recordings.</p>
                     <div class="space-y-2 text-sm">
                         <label class="block">Live transcription
                             <select id="liveTranscription" class="w-full border rounded p-2 mt-1">
@@ -82,7 +85,9 @@
                             </select>
                         </label>
                     </div>
-                    <button onclick="saveProviders()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">Save providers</button>
+                    <button onclick="saveProviders()"
+                        class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition">Save
+                        providers</button>
                     <p id="providerResolved" class="text-[11px] text-slate-500"></p>
                 </div>
             </div>
@@ -167,10 +172,10 @@
             el.innerText = text || '';
         }
 
-        function fillSelect(id, value, fallback) {
+        function fillSelect(id, value) {
             const el = document.getElementById(id);
             if (!el) return;
-            el.value = value || fallback || el.value;
+            el.value = value || el.value;
         }
 
         async function loadProviders() {
@@ -178,23 +183,32 @@
                 const res = await fetch('/api/admin/providers');
                 if (!res.ok) throw new Error('Failed to load providers');
                 const data = await res.json();
-                const { overrides = {}, resolved = {} } = data;
-                fillSelect('liveTranscription', overrides.liveTranscription, resolved.liveTranscription?.provider);
-                fillSelect('offlineTranscription', overrides.offlineTranscription, resolved.offlineTranscription?.provider);
-                fillSelect('scribeProvider', overrides.scribeProvider, resolved.scribe?.provider);
-                fillSelect('formatProvider', overrides.formatProvider, resolved.format?.provider);
-                fillSelect('reviewProvider', overrides.reviewProvider, resolved.review?.provider);
+
+                // Backend returns resolved config directly: 
+                // { liveTranscription: { provider: 'deepgram' }, ... }
+                // It does NOT return { overrides, resolved } anymore.
+
+                fillSelect('liveTranscription', data.liveTranscription?.provider);
+                fillSelect('offlineTranscription', data.offlineTranscription?.provider);
+                fillSelect('scribeProvider', data.scribe?.provider);
+                fillSelect('formatProvider', data.format?.provider);
+                fillSelect('reviewProvider', data.review?.provider);
 
                 const summary = [
-                    `Live: ${overrides.liveTranscription || resolved.liveTranscription?.provider}`,
-                    `Offline: ${overrides.offlineTranscription || resolved.offlineTranscription?.provider}`,
-                    `Scribe: ${overrides.scribeProvider || resolved.scribe?.provider}`,
-                    `Format: ${overrides.formatProvider || resolved.format?.provider}`,
-                    `Review: ${overrides.reviewProvider || resolved.review?.provider}`
+                    `Live: ${data.liveTranscription?.provider}`,
+                    `Offline: ${data.offlineTranscription?.provider}`,
+                    `Scribe: ${data.scribe?.provider}`,
+                    `Format: ${data.format?.provider}`,
+                    `Review: ${data.review?.provider}`
                 ].join(' • ');
                 const resolvedEl = document.getElementById('providerResolved');
                 if (resolvedEl) resolvedEl.innerText = `Current: ${summary}`;
-                setProviderStatus('');
+
+                // Do not clear status immediately if it says Saved
+                const statusEl = document.getElementById('providerStatus');
+                if (statusEl && statusEl.innerText !== 'Saved') {
+                    setProviderStatus('');
+                }
             } catch (e) {
                 setProviderStatus(e.message || 'Load failed', 'text-red-600');
             }
@@ -219,12 +233,21 @@
                     const data = await res.json();
                     throw new Error(data.error || 'Save failed');
                 }
+
                 setProviderStatus('Saved', 'text-emerald-600');
-                loadProviders();
+                await loadProviders();
+
+                // Keep "Saved" visible for 3 seconds
+                setTimeout(() => {
+                    const el = document.getElementById('providerStatus');
+                    if (el && el.innerText === 'Saved') setProviderStatus('');
+                }, 3000);
+
             } catch (e) {
                 setProviderStatus(e.message || 'Save failed', 'text-red-600');
             }
         }
     </script>
 </body>
+
 </html>

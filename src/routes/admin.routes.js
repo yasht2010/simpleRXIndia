@@ -15,5 +15,6 @@ router.get('/users', requireAdmin, adminController.listUsers);
 router.post('/credits', requireAdmin, adminController.addCredits);
 router.post('/remove-user', requireAdmin, adminController.removeUser);
 router.get('/providers', requireAdmin, adminController.getProviders);
+router.post('/providers', requireAdmin, adminController.saveProviders);
 
 export default router;

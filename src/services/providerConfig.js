@@ -9,18 +9,18 @@ const normalize = (value) => (value || "").toLowerCase();
 
 const TASK_MODEL_DEFAULTS = {
     scribe: {
-        gemini: 'gemini-2.5-flash',
-        openai: 'gpt-5-mini',
+        gemini: 'gemini-1.5-flash',
+        openai: 'gpt-4o-mini',
         groq: 'llama-3.3-70b-versatile'
     },
     format: {
-        gemini: 'gemini-2.5-flash',
-        openai: 'gpt-5-mini',
+        gemini: 'gemini-1.5-flash',
+        openai: 'gpt-4o-mini',
         groq: 'llama-3.3-70b-versatile'
     },
     review: {
-        gemini: 'gemini-2.5-flash',
-        openai: 'gpt-5',
+        gemini: 'gemini-1.5-flash',
+        openai: 'gpt-4o',
         groq: 'llama-3.3-70b-versatile'
     }
 };
@@ -50,8 +50,17 @@ export const getLlmConfig = (task) => {
     const taskKey = task.toLowerCase();
     const overrideKey = `${taskKey}Provider`;
     const provider = normalize(providerOverrides[overrideKey]) || normalize(process.env[PROVIDER_ENV[taskKey]]) || PROVIDER_DEFAULTS[taskKey];
-    const envModel = process.env[MODEL_ENV[taskKey]];
-    const model = envModel || TASK_MODEL_DEFAULTS[taskKey][provider] || TASK_MODEL_DEFAULTS[taskKey].gemini;
+
+    // Check for provider-specific model in env first (e.g., SCRIBE_MODEL_GEMINI)
+    const specificEnvKey = `${MODEL_ENV[taskKey]}_${provider.toUpperCase()}`;
+    const specificEnvModel = process.env[specificEnvKey];
+
+    // Generic fallback (e.g. SCRIBE_MODEL)
+    const genericEnvModel = process.env[MODEL_ENV[taskKey]];
+
+    // Priority: 1. Specific Env (SCRIBE_MODEL_GEMINI) 2. Generic Env (SCRIBE_MODEL) 3. Hardcoded Default for Provider
+    const model = specificEnvModel || genericEnvModel || TASK_MODEL_DEFAULTS[taskKey][provider] || TASK_MODEL_DEFAULTS[taskKey].gemini;
+
     return { provider, model };
 };
 

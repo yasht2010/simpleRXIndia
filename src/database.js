@@ -14,7 +14,8 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-const seedAdminUser = async () => {
+
+export const seedAdminUser = async () => {
     const { data: existing, error: existingError } = await supabase
         .from('users')
         .select('id')
@@ -40,8 +41,7 @@ const seedAdminUser = async () => {
 
     if (error) console.error('Error seeding admin:', error);
 };
-
-seedAdminUser();
+// Removed top-level call to seedAdminUser();
 
 // --- USER FUNCTIONS ---
 
@@ -195,7 +195,7 @@ export const getProviderSettings = async () => {
     const { data, error } = await supabase
         .from(PROVIDER_TABLE)
         .select('key, value');
-    
+
     if (error) {
         // Table might not exist yet; return empty overrides instead of crashing
         if (error.code === '42P01' || error.code === 'PGRST116') {

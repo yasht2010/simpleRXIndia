@@ -1,5 +1,5 @@
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { getClient as getS3Client } from '../services/s3.service.js';
+// import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { getClient as getS3Client, getCommands as getS3Commands } from '../services/s3.service.js';
 import * as transcriptionService from '../services/transcription.service.js';
 import * as llmService from '../services/llm.service.js';
 import * as db from '../database.js';
@@ -9,7 +9,14 @@ import fs from 'fs';
 import path from 'path';
 
 // Helper
-const cleanAI = (text = "") => text.replace(/```(?:html)?/gi, "").replace(/```/g, "").trim();
+// Helper
+const cleanAI = (text = "") => {
+    return text
+        .replace(/^```(?:json|html|xml|markdown)?\s*/i, "")
+        .replace(/\s*```$/, "")
+        .replace(/^json\s*(?=\{)/i, "")
+        .trim();
+};
 const sanitizeContent = (html = "") => sanitizeHtml(html, {
     allowedTags: ['h1', 'h2', 'h3', 'h4', 'p', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'br', 'span', 'div'],
     allowedAttributes: {
@@ -35,7 +42,8 @@ export const processS3 = async (req, res) => {
     try {
         if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
         const { key, context } = req.body || {};
-        const s3 = getS3Client();
+        const s3 = await getS3Client();
+        const { GetObjectCommand } = await getS3Commands();
 
         console.log("📦 /api/process-s3 start", { userId: req.session.userId, key });
 

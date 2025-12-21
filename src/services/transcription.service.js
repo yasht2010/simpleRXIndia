@@ -1,14 +1,34 @@
-import { createClient } from '@deepgram/sdk';
-import OpenAI from 'openai';
+// import { createClient } from '@deepgram/sdk';
+// import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { getTranscriptionConfig } from './providerConfig.js';
-import { toFile } from 'openai';
+// import { toFile } from 'openai'; // We need to handle this dynamically
 import path from 'path';
 
 dotenv.config();
 
-const deepgram = process.env.DEEPGRAM_API_KEY ? createClient(process.env.DEEPGRAM_API_KEY) : null;
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+let deepgram = null;
+let openai = null;
+let DeepgramSDK = null;
+let OpenAI_SDK = null;
+
+const getDeepgram = async () => {
+    if (deepgram) return deepgram;
+    if (process.env.DEEPGRAM_API_KEY) {
+        if (!DeepgramSDK) DeepgramSDK = await import('@deepgram/sdk');
+        deepgram = DeepgramSDK.createClient(process.env.DEEPGRAM_API_KEY);
+    }
+    return deepgram;
+};
+
+const getOpenAI = async () => {
+    if (openai) return openai;
+    if (process.env.OPENAI_API_KEY) {
+        if (!OpenAI_SDK) OpenAI_SDK = await import('openai');
+        openai = new OpenAI_SDK.default({ apiKey: process.env.OPENAI_API_KEY });
+    }
+    return openai;
+};
 
 const groqTranscribe = async (buffer, filename, model) => {
     const groqKey = process.env.GROQ_API_KEY;
@@ -34,8 +54,9 @@ export const transcribe = async (audioBuffer, filename, mimetype) => {
     console.log(`🔊 Transcribing with ${lowerProvider} model=${model}`);
 
     if (lowerProvider === 'deepgram') {
-        if (!deepgram) throw new Error("Deepgram not configured");
-        const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
+        const dg = await getDeepgram();
+        if (!dg) throw new Error("Deepgram not configured");
+        const { result, error } = await dg.listen.prerecorded.transcribeFile(
             audioBuffer,
             { model, smart_format: true, language, mimetype }
         );
@@ -44,10 +65,16 @@ export const transcribe = async (audioBuffer, filename, mimetype) => {
     }
 
     if (lowerProvider === 'openai') {
-        if (!openai) throw new Error("OpenAI not configured");
-        const fileObj = await toFile(audioBuffer, filename);
-        // OpenAI requires a file object with name
-        const oaRes = await openai.audio.transcriptions.create({
+        const oa = await getOpenAI();
+        if (!oa) throw new Error("OpenAI not configured");
+
+        // We need 'toFile' helper from openai locally or mocked since we can't import it statically easily if main import fails
+        // Actually, 'openai' package exports 'toFile'.
+        // const { toFile } = await import('openai'); 
+        if (!OpenAI_SDK) OpenAI_SDK = await import('openai');
+        const fileObj = await OpenAI_SDK.toFile(audioBuffer, filename);
+
+        const oaRes = await oa.audio.transcriptions.create({
             file: fileObj,
             model,
             response_format: "text"

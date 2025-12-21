@@ -1,0 +1,27 @@
+your-domain.com {
+    reverse_proxy localhost:3000
+    
+    # Automatic HTTPS via Let's Encrypt
+    tls {
+        protocols tls1.2 tls1.3
+    }
+    
+    # Security headers (additional to Helmet)
+    header {
+        # Remove server identification
+        -Server
+        
+        # Additional security
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+    
+    # Logging
+    log {
+        output file /var/log/caddy/clinova-rx.log
+        format json
+    }
+}
+
+# HTTP to HTTPS redirect (automatic with Caddy)

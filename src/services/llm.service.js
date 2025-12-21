@@ -1,20 +1,41 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import OpenAI from 'openai';
+// import { GoogleGenerativeAI } from '@google/generative-ai';
+// import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { getLlmConfig } from './providerConfig.js';
 
 dotenv.config();
 
-const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+let genAI = null;
+let openai = null;
+let GoogleGenAI = null;
+let OpenAI_SDK = null;
+
+const getGemini = async () => {
+    if (genAI) return genAI;
+    if (process.env.GEMINI_API_KEY) {
+        if (!GoogleGenAI) GoogleGenAI = await import('@google/generative-ai');
+        genAI = new GoogleGenAI.GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    }
+    return genAI;
+};
+
+const getOpenAI = async () => {
+    if (openai) return openai;
+    if (process.env.OPENAI_API_KEY) {
+        if (!OpenAI_SDK) OpenAI_SDK = await import('openai');
+        openai = new OpenAI_SDK.default({ apiKey: process.env.OPENAI_API_KEY });
+    }
+    return openai;
+};
 
 export const runLlmTask = async (task, prompt, { responseSchema, forceJson = false } = {}) => {
     const { provider, model } = getLlmConfig(task);
     const lowerProvider = provider.toLowerCase();
 
     if (lowerProvider === 'gemini') {
-        if (!genAI) throw new Error("Gemini not configured");
-        const llm = genAI.getGenerativeModel({ model });
+        const ai = await getGemini();
+        if (!ai) throw new Error("Gemini not configured");
+        const llm = ai.getGenerativeModel({ model });
         try {
             const res = responseSchema
                 ? await llm.generateContent({
@@ -39,13 +60,18 @@ export const runLlmTask = async (task, prompt, { responseSchema, forceJson = fal
     }
 
     if (lowerProvider === 'openai') {
-        if (!openai) throw new Error("OpenAI not configured");
+        const oa = await getOpenAI();
+        if (!oa) throw new Error("OpenAI not configured");
         const messages = [];
         if (responseSchema || forceJson) {
-            messages.push({ role: 'system', content: 'Respond with a single JSON object only. Do not include any text before or after the JSON.' });
+            let sysMsg = 'Respond with a single JSON object only. Do not include any text before or after the JSON.';
+            if (responseSchema) {
+                sysMsg += `\nYour JSON response must adhere to this schema:\n${JSON.stringify(responseSchema, null, 2)}`;
+            }
+            messages.push({ role: 'system', content: sysMsg });
         }
         messages.push({ role: 'user', content: prompt });
-        const completion = await openai.chat.completions.create({
+        const completion = await oa.chat.completions.create({
             model,
             messages,
             response_format: (responseSchema || forceJson) ? { type: 'json_object' } : undefined
@@ -56,14 +82,22 @@ export const runLlmTask = async (task, prompt, { responseSchema, forceJson = fal
     if (lowerProvider === 'groq') {
         const groqKey = process.env.GROQ_API_KEY;
         if (!groqKey) throw new Error("GROQ_API_KEY missing");
+
+        let messages = [];
+        if (responseSchema || forceJson) {
+            let sysMsg = 'Respond with a single JSON object only. Do not include any text before or after the JSON.';
+            if (responseSchema) {
+                sysMsg += `\nYour JSON response must adhere to this schema:\n${JSON.stringify(responseSchema, null, 2)}`;
+            }
+            messages.push({ role: 'system', content: sysMsg });
+            messages.push({ role: 'user', content: prompt });
+        } else {
+            messages.push({ role: 'user', content: prompt });
+        }
+
         const payload = {
             model,
-            messages: (responseSchema || forceJson)
-                ? [
-                    { role: 'system', content: 'Respond with a single JSON object only. Do not include any text before or after the JSON.' },
-                    { role: 'user', content: prompt }
-                ]
-                : [{ role: 'user', content: prompt }],
+            messages,
             response_format: (responseSchema || forceJson) ? { type: 'json_object' } : undefined
         };
         const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {

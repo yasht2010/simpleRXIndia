@@ -1,7 +1,9 @@
+console.log("🚀 Starting server initialization...");
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { app, sessionMiddleware } from './app.js';
 import dotenv from 'dotenv';
+
 
 dotenv.config();
 

@@ -83,9 +83,22 @@ export const getProviders = async (_req, res) => {
 };
 
 export const saveProviders = async (req, res) => {
-    // This endpoint wasn't in list of server_original.js viewing but assumed?
-    // Checking server.js text from before... I only saw GET /api/admin/providers
-    // I should check if there was a POST.
-    // If not, I won't implement it yet.
-    res.status(501).json({ error: "Not implemented" });
+    try {
+        const settings = req.body;
+        // 1. Save to DB
+        await db.saveProviderSettings(settings);
+
+        // 2. Update in-memory config
+        // Only if we move setProviderOverrides to an accessible import or ensure app.js reloads it?
+        // Actually, we imported setProviderOverrides in app.js. 
+        // We should probably expose it here or handle it.
+        // Let's import it here.
+        const { setProviderOverrides } = await import('../services/providerConfig.js');
+        setProviderOverrides(settings);
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Admin save providers error:', e);
+        res.status(500).json({ error: 'Failed to save provider settings' });
+    }
 };

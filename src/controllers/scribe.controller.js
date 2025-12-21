@@ -10,7 +10,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.join(__dirname, '..', '..'); // Up from src/controllers
 
 // Utility for cleaning AI response
-const cleanAI = (text = "") => text.replace(/```(?:html)?/gi, "").replace(/```/g, "").trim();
+// Utility for cleaning AI response
+const cleanAI = (text = "") => {
+    return text
+        .replace(/^```(?:json|html|xml|markdown)?\s*/i, "")
+        .replace(/\s*```$/, "")
+        .replace(/^json\s*(?=\{)/i, "") // Handle "json { ... }"
+        .trim();
+};
 
 const sanitizeContent = (html = "") => sanitizeHtml(html, {
     allowedTags: ['h1', 'h2', 'h3', 'h4', 'p', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'br', 'span', 'div'],

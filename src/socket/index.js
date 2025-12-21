@@ -1,4 +1,4 @@
-import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
+// import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
 import * as db from '../database.js';
 import * as llmService from '../services/llm.service.js';
 import { generateScribePrompt } from '../prompts.js';
@@ -8,7 +8,18 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+// const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+let deepgram = null;
+let DeepgramSDK = null;
+
+const getDeepgram = async () => {
+    if (deepgram) return deepgram;
+    if (process.env.DEEPGRAM_API_KEY) {
+        if (!DeepgramSDK) DeepgramSDK = await import('@deepgram/sdk');
+        deepgram = DeepgramSDK.createClient(process.env.DEEPGRAM_API_KEY);
+    }
+    return deepgram;
+};
 
 const cleanAI = (text = "") => text.replace(/```(?:html)?/gi, "").replace(/```/g, "").trim();
 
@@ -45,7 +56,9 @@ export const setupSocket = (io) => {
                     ? settings.custom_keywords.split(',').map(k => k.trim() + ":2")
                     : [];
 
-                dgConnection = deepgram.listen.live({
+                const deepgramClient = await getDeepgram();
+
+                dgConnection = deepgramClient.listen.live({
                     model: LIVE_TRANSCRIPTION.model,
                     language: LIVE_TRANSCRIPTION.language,
                     smart_format: true,
@@ -58,7 +71,7 @@ export const setupSocket = (io) => {
                 });
 
                 // Events
-                dgConnection.on(LiveTranscriptionEvents.Open, () => {
+                dgConnection.on(DeepgramSDK.LiveTranscriptionEvents.Open, () => {
                     console.log(`🟢 Deepgram Open (${socket.id})`);
 
                     // KeepAlive Logic (Prevent 10s timeout during silence)
@@ -69,7 +82,7 @@ export const setupSocket = (io) => {
                     }, 8000);
                 });
 
-                dgConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
+                dgConnection.on(DeepgramSDK.LiveTranscriptionEvents.Transcript, (data) => {
                     const transcript = data.channel?.alternatives?.[0]?.transcript;
                     if (transcript) {
                         console.log(`🗣️ DG transcript (${socket.id}):`, transcript);
@@ -80,14 +93,13 @@ export const setupSocket = (io) => {
                     }
                 });
 
-                dgConnection.on(LiveTranscriptionEvents.Error, (err) => console.error("DG Error:", err));
+                dgConnection.on(DeepgramSDK.LiveTranscriptionEvents.Error, (err) => console.error("DG Error:", err));
 
-                dgConnection.on(LiveTranscriptionEvents.Close, () => {
+                dgConnection.on(DeepgramSDK.LiveTranscriptionEvents.Close, () => {
                     console.log(`🔴 Deepgram Closed (${socket.id})`);
                     clearInterval(keepAliveInterval);
                     dgConnection = null;
                 });
-
             } catch (err) {
                 console.error("Setup Error:", err);
             }
